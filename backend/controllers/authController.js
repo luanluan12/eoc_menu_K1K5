@@ -1,0 +1,289 @@
+const bcrypt = require("bcrypt");
+
+const User = require("../models/User");
+
+const generateToken = require("../config/jwt");
+
+const crypto = require("crypto");
+
+const moment = require("moment-timezone");
+
+const ResetPasswordToken = require("../models/ResetPasswordToken");
+
+const sendMail = require("../utils/mail");
+
+const resetPasswordMail = require("../utils/resetPasswordMail");
+
+const getFrontendUrl = require("../utils/frontendUrl");
+
+const supportedRoles = new Set([
+  "admin",
+  "admin_kitchen",
+  "guest",
+]);
+
+const findUserByEmail = (email) => {
+  const normalizedEmail = typeof email === "string" ? email.trim() : "";
+
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const escapedEmail = normalizedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  return User.findOne({
+    email: {
+      $regex: `^${escapedEmail}$`,
+      $options: "i",
+    },
+  });
+};
+
+exports.login = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await findUserByEmail(email);
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Email not found",
+      });
+    }
+
+    if (!supportedRoles.has(user.role)) {
+      return res.status(403).json({
+        message: "Tài khoản không còn được hỗ trợ.",
+      });
+    }
+
+    // =====================================
+    // Nghỉ việc
+    // =====================================
+
+    const today = moment().tz("Asia/Ho_Chi_Minh").startOf("day");
+
+    const inactiveFrom = user.inactiveFrom
+      ? moment(user.inactiveFrom).tz("Asia/Ho_Chi_Minh").startOf("day")
+      : null;
+
+    if (inactiveFrom?.isSameOrBefore(today)) {
+      if (user.status !== "inactive") {
+        user.status = "inactive";
+        await user.save();
+      }
+
+      return res.status(403).json({
+        message: "Tài khoản đã bị vô hiệu hoá.",
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Wrong password",
+      });
+    }
+
+    res.json({
+      token: generateToken(user),
+
+      user: {
+        id: user._id,
+
+        name: user.name,
+
+        role: user.role,
+
+        kitchen: user.kitchen,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: err.message,
+    });
+  }
+};
+
+exports.changePassword = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const {
+      oldPassword,
+
+      newPassword,
+    } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Vui lòng nhập đầy đủ.",
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+
+        message: "Không tìm thấy tài khoản.",
+      });
+    }
+
+    const match = await bcrypt.compare(
+      oldPassword,
+
+      user.password,
+    );
+
+    if (!match) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Mật khẩu cũ không đúng.",
+      });
+    }
+
+    user.password = await bcrypt.hash(
+      newPassword,
+
+      10,
+    );
+
+    await user.save();
+
+    res.json({
+      success: true,
+
+      message: "Đổi mật khẩu thành công.",
+    });
+  } catch (err) {
+    console.log(err);
+
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const normalizedEmail =
+      typeof email === "string" ? email.trim().toLowerCase() : "";
+
+    if (!normalizedEmail) {
+      return res.status(400).json({
+        success: false,
+        code: "EMAIL_REQUIRED",
+      });
+    }
+
+    const user = await findUserByEmail(email);
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        code: "EMAIL_NOT_FOUND",
+      });
+    }
+
+    await ResetPasswordToken.deleteMany({
+      user: user._id,
+    });
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await ResetPasswordToken.create({
+      user: user._id,
+      token,
+      expiresAt,
+    });
+
+    const resetLink = `${getFrontendUrl()}/reset-password?token=${token}`;
+
+    await sendMail({
+      to: user.email,
+      subject: user.language === "en" ? "Reset your password" : "Đặt lại mật khẩu",
+      html: resetPasswordMail(user, resetLink),
+    });
+
+    return res.json({
+      success: true,
+      code: "RESET_PASSWORD_EMAIL_SENT",
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      code: "INTERNAL_SERVER_ERROR",
+    });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        code: "MISSING_REQUIRED_FIELDS",
+      });
+    }
+
+    const resetToken = await ResetPasswordToken.findOne({
+      token,
+    });
+
+    if (!resetToken) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_RESET_TOKEN",
+      });
+    }
+
+    if (resetToken.expiresAt < new Date()) {
+      await ResetPasswordToken.deleteOne({
+        _id: resetToken._id,
+      });
+
+      return res.status(400).json({
+        success: false,
+        code: "RESET_TOKEN_EXPIRED",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await User.findByIdAndUpdate(resetToken.user, {
+      password: hashedPassword,
+    });
+
+    await ResetPasswordToken.deleteOne({
+      _id: resetToken._id,
+    });
+
+    return res.json({
+      success: true,
+      code: "PASSWORD_RESET_SUCCESS",
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      code: "INTERNAL_SERVER_ERROR",
+    });
+  }
+};

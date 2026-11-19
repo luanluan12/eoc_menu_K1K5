@@ -1,0 +1,167 @@
+import axios from "./axios";
+
+/**
+ * Đặt món cả tuần
+ */
+export const createOrder = (data) => {
+  return axios.post(
+    "/order",
+
+    data,
+  );
+};
+
+/**
+ * Cập nhật đặt món cả tuần
+ */
+export const updateOrder = (id, data) => {
+  return axios.put(
+    `/order/${id}`,
+
+    data,
+  );
+};
+
+/** Admin EOC cập nhật đơn thay cho nhân viên. */
+export const adminUpdateOrder = (id, data) => {
+  return axios.put(`/order/admin/${id}`, data);
+};
+
+/**
+ * Hủy đặt món cả tuần
+ */
+export const cancelOrder = (id) => {
+  return axios.put(
+    `/order/${id}/cancel`,
+  );
+};
+
+/**
+ * Lịch sử đặt món
+ */
+export const getHistory = () => {
+  return axios.get("/order/history");
+};
+
+/**
+ * Đánh giá bữa ăn
+ */
+export const submitReview = (data) => {
+  return axios.post("/order/review", data);
+};
+
+/**
+ * Chi tiết đơn đặt món
+ */
+export const getOrderById = (id) => {
+  return axios.get(`/order/${id}`);
+};
+
+/**
+ * Kiểm tra Link Email
+ */
+export const verifyInvite = (token) => {
+  return axios.post(
+    "/order/verify",
+
+    {
+      token,
+    },
+  );
+};
+
+/**
+ * Đặt món từ Link Email
+ */
+export const createOrderFromInvite = (data) => {
+  return axios.post(
+    "/order/invite",
+
+    data,
+  );
+};
+
+export const getOrders = (params = {}) => {
+  return axios.get("/order", {
+    params,
+  });
+};
+
+export const getWeekSummary = (date) => {
+  return axios.get("/order/week-summary", { params: { date } });
+};
+
+export const deleteOrder = (id) => axios.delete(`/order/${id}`);
+
+export const getBulkCancelOptions = () => {
+  return axios.get("/order/bulk-cancel/options");
+};
+
+export const searchBulkCancelUsers = (search) => {
+  return axios.get("/order/bulk-cancel/users", { params: { search } });
+};
+
+export const previewBulkCancel = (data) => {
+  return axios.post("/order/bulk-cancel/preview", data);
+};
+
+export const bulkCancelOrderDays = (data) => {
+  return axios.post("/order/bulk-cancel", data);
+};
+
+/**
+ * Danh sách đánh giá
+ */
+export const getReviews = (params = {}) => {
+  return axios.get(
+    "/order/reviews",
+
+    {
+      params,
+    },
+  );
+};
+
+export const scanQr = (data) => {
+  return axios.post("/order/scan", data);
+};
+
+// ===============================
+// Preview QR
+// ===============================
+
+export const previewQr = (data) => {
+  return axios.post(
+    "/order/preview",
+
+    data,
+  );
+};
+
+export const manualCheckin = (data) => axios.put("/order/checkin/manual", data);
+
+// ===============================
+// Confirm Receive
+// ===============================
+
+export const confirmReceive = (data) => {
+  return axios.post(
+    "/order/receive",
+
+    data,
+  );
+};
+
+// ===============================
+// Manual Order
+// ===============================
+
+export const getAvailableUsers = (menuId) => {
+  return axios.get("/order/manual/users", {
+    params: menuId ? { menuId } : undefined,
+  });
+};
+
+export const createManualOrder = (data) => {
+  return axios.post("/order/manual", data);
+};

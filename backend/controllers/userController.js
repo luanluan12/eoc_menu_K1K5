@@ -1,0 +1,826 @@
+const User = require("../models/User");
+const bcrypt = require("bcrypt");
+const XLSX = require("xlsx");
+const fs = require("fs");
+const Order = require("../models/Order");
+const moment = require("moment-timezone");
+
+const normalizeKitchen = (value) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  const kitchenMap = {
+    k1: "K1",
+    "1": "K1",
+    k5: "K5",
+    "5": "K5",
+  };
+
+  return kitchenMap[normalized] || null;
+};
+
+/**
+ * Lấy danh sách User
+ */
+exports.getUsers = async (req, res) => {
+  try {
+    let filter = {};
+
+    if (req.user.role === "admin_kitchen") {
+      filter.kitchen = req.user.kitchen;
+    }
+
+    const users = await User.find(filter)
+      .select("-password")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      total: users.length,
+      data: users,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Lấy User theo ID
+ */
+exports.getUserById = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: user,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Tạo User
+ */
+exports.createUser = async (req, res) => {
+  try {
+    const { employeeId, name, email, password, kitchen, role, language } =
+      req.body;
+
+    let userKitchen = normalizeKitchen(kitchen);
+    let userRole = role || "guest";
+
+    if (!kitchen && req.user.role !== "admin_kitchen") {
+      userKitchen = "K1";
+    }
+
+    if (!userKitchen && req.user.role !== "admin_kitchen") {
+      return res.status(400).json({
+        success: false,
+        message: "Bếp phải là K1 hoặc K5.",
+      });
+    }
+
+    if (req.user.role === "admin_kitchen") {
+      userKitchen = req.user.kitchen;
+
+      userRole = "guest";
+    } else if (userRole === "admin") {
+      userKitchen = "K1, K5";
+    }
+
+    if (!name || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Name and Email are required.",
+      });
+    }
+
+    const emailExist = await User.findOne({ email });
+
+    if (emailExist) {
+      return res.status(400).json({
+        success: false,
+        message: "Email already exists.",
+      });
+    }
+
+    if (employeeId) {
+      const employeeExist = await User.findOne({
+        employeeId,
+      });
+
+      if (employeeExist) {
+        return res.status(400).json({
+          success: false,
+          message: "Employee ID already exists.",
+        });
+      }
+    }
+
+    const hashPassword = await bcrypt.hash(password || "123456", 10);
+
+    const user = await User.create({
+      employeeId,
+
+      name,
+
+      email,
+
+      password: hashPassword,
+
+      kitchen: userKitchen,
+
+      role: userRole,
+
+      language: language || "vi",
+    });
+
+    const result = user.toObject();
+
+    delete result.password;
+
+    res.status(201).json({
+      success: true,
+
+      message: "User created successfully.",
+
+      data: result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Cập nhật User
+ */
+exports.updateUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (req.user.role === "admin_kitchen" && user.kitchen !== req.user.kitchen) {
+      return res.status(403).json({
+        success: false,
+
+        message: "Không có quyền.",
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+
+        message: "User not found.",
+      });
+    }
+
+    if (req.body.email && req.body.email !== user.email) {
+      const exist = await User.findOne({
+        email: req.body.email,
+      });
+
+      if (exist) {
+        return res.status(400).json({
+          success: false,
+
+          message: "Email already exists.",
+        });
+      }
+
+      user.email = req.body.email;
+    }
+
+    if (req.body.employeeId && req.body.employeeId !== user.employeeId) {
+      const exist = await User.findOne({
+        employeeId: req.body.employeeId,
+      });
+
+      if (exist) {
+        return res.status(400).json({
+          success: false,
+
+          message: "Employee ID already exists.",
+        });
+      }
+
+      user.employeeId = req.body.employeeId;
+    }
+
+    user.name = req.body.name ?? user.name;
+
+    user.language = req.body.language ?? user.language;
+
+    if (req.user.role === "admin_kitchen") {
+      user.kitchen = req.user.kitchen;
+
+      user.role = "guest";
+    } else {
+      if (
+        req.body.role !== "admin" &&
+        req.body.kitchen !== undefined &&
+        req.body.kitchen !== user.kitchen
+      ) {
+        const normalizedKitchen = normalizeKitchen(req.body.kitchen);
+
+        if (!normalizedKitchen) {
+          return res.status(400).json({
+            success: false,
+            message: "Bếp phải là K1 hoặc K5.",
+          });
+        }
+
+        user.kitchen = normalizedKitchen;
+      }
+
+      user.role = req.body.role ?? user.role;
+      if (user.role === "admin") {
+        user.kitchen = "K1, K5";
+      }
+    }
+
+    await user.save();
+
+    const result = user.toObject();
+
+    delete result.password;
+
+    res.status(200).json({
+      success: true,
+
+      message: "User updated successfully.",
+
+      data: result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+exports.resignUser = async (req, res) => {
+  try {
+    const { date } = req.body;
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng chọn ngày nghỉ việc.",
+      });
+    }
+
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy nhân viên.",
+      });
+    }
+
+    if (req.user.role === "admin_kitchen" && user.kitchen !== req.user.kitchen) {
+      return res.status(403).json({
+        success: false,
+        message: "Không có quyền.",
+      });
+    }
+
+    const resignDate = moment(date).tz("Asia/Ho_Chi_Minh").startOf("day");
+
+    // ==========================
+    // Hủy suất ăn
+    // ==========================
+
+    const orders = await Order.find({
+      user: user._id,
+      status: "ordered",
+    });
+
+    for (const order of orders) {
+      let changed = false;
+
+      order.days.forEach((day) => {
+        const orderDate = moment(day.date)
+          .tz("Asia/Ho_Chi_Minh")
+          .startOf("day");
+
+        if (orderDate.isSameOrAfter(resignDate)) {
+          day.mains = [];
+          day.drink = null;
+          day.soup = null;
+          day.dessert = null;
+
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        await order.save();
+      }
+    }
+
+    // ==========================
+    // Cập nhật User
+    // ==========================
+
+    const today = moment().tz("Asia/Ho_Chi_Minh").startOf("day");
+
+    user.inactiveFrom = resignDate.toDate();
+
+    if (resignDate.isSameOrBefore(today)) {
+      user.status = "inactive";
+    } else {
+      user.status = "active";
+    }
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Đã cập nhật nghỉ việc thành công.",
+    });
+  } catch (err) {
+    console.log(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Xóa User
+ */
+exports.deleteUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (req.user.role === "admin_kitchen" && user.kitchen !== req.user.kitchen) {
+      return res.status(403).json({
+        success: false,
+
+        message: "Không có quyền.",
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+
+        message: "User not found.",
+      });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+
+      message: "User deleted successfully.",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Đổi mật khẩu
+ */
+exports.changePassword = async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Old password and new password are required.",
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Old password is incorrect.",
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+
+    await user.save();
+
+    res.json({
+      success: true,
+
+      message: "Password changed successfully.",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Admin reset password
+ */
+exports.resetPassword = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (req.user.role === "admin_kitchen" && user.kitchen !== req.user.kitchen) {
+      return res.status(403).json({
+        success: false,
+
+        message: "Không có quyền.",
+      });
+    }
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+
+        message: "User not found.",
+      });
+    }
+
+    user.password = await bcrypt.hash(
+      "123456",
+
+      10,
+    );
+
+    await user.save();
+
+    res.json({
+      success: true,
+
+      message: "Password has been reset to 123456.",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Search User
+ *
+ * GET /api/user/search?keyword=abc
+ */
+exports.searchUsers = async (req, res) => {
+  try {
+    const keyword = req.query.keyword || "";
+
+    const users = await User.find({
+      $or: [
+        {
+          name: {
+            $regex: keyword,
+
+            $options: "i",
+          },
+        },
+
+        {
+          email: {
+            $regex: keyword,
+
+            $options: "i",
+          },
+        },
+
+        {
+          employeeId: {
+            $regex: keyword,
+
+            $options: "i",
+          },
+        },
+      ],
+    })
+
+      .select("-password")
+
+      .sort({
+        name: 1,
+      });
+
+    res.json({
+      success: true,
+
+      total: users.length,
+
+      data: users,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Pagination
+ *
+ * GET /api/user/page?page=1&limit=10
+ */
+exports.pagination = async (req, res) => {
+  try {
+    const page = Number(req.query.page) || 1;
+
+    const limit = Number(req.query.limit) || 10;
+
+    const skip = (page - 1) * limit;
+
+    const total = await User.countDocuments();
+
+    const users = await User.find()
+
+      .select("-password")
+
+      .skip(skip)
+
+      .limit(limit)
+
+      .sort({
+        createdAt: -1,
+      });
+
+    res.json({
+      success: true,
+
+      page,
+
+      limit,
+
+      total,
+
+      totalPages: Math.ceil(total / limit),
+
+      data: users,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+exports.importExcel = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Please upload an Excel file.",
+      });
+    }
+
+    const workbook = XLSX.readFile(req.file.path);
+
+    const sheetName = workbook.SheetNames[0];
+
+    const sheet = workbook.Sheets[sheetName];
+
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    if (rows.length === 0) {
+      fs.unlinkSync(req.file.path);
+
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is empty.",
+      });
+    }
+
+    let success = 0;
+    let failed = 0;
+
+    const errors = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+
+      try {
+        const employeeId = row.EmployeeID?.toString().trim();
+
+        const name = row.Name?.toString().trim();
+
+        const email = row.Email?.toString().trim().toLowerCase();
+
+        const language =
+          row.Language?.toString().trim().toLowerCase() === "en" ? "en" : "vi";
+
+        let kitchen = normalizeKitchen(row.Kitchen || row["Bếp"]);
+        if (req.user.role === "admin_kitchen") {
+          kitchen = req.user.kitchen;
+        }
+
+        if (!kitchen) {
+          failed++;
+          errors.push({
+            row: i + 2,
+            message: "Bếp phải là K1 hoặc K5.",
+          });
+          continue;
+        }
+
+        let role = "guest";
+
+        if (req.user.role !== "admin_kitchen") {
+          const roles = ["guest", "admin", "admin_kitchen"];
+
+          role = roles.includes(row.Role) ? row.Role : "guest";
+        }
+
+        if (!employeeId || !name || !email) {
+          failed++;
+
+          errors.push({
+            row: i + 2,
+
+            message: "Missing EmployeeID, Name or Email",
+          });
+
+          continue;
+        }
+
+        const existEmail = await User.findOne({
+          email,
+        });
+
+        if (existEmail) {
+          failed++;
+
+          errors.push({
+            row: i + 2,
+
+            message: "Email already exists",
+          });
+
+          continue;
+        }
+
+        const existEmployee = await User.findOne({
+          employeeId,
+        });
+
+        if (existEmployee) {
+          failed++;
+
+          errors.push({
+            row: i + 2,
+
+            message: "EmployeeID already exists",
+          });
+
+          continue;
+        }
+
+        const hashPassword = await bcrypt.hash("123456", 10);
+
+        await User.create({
+          employeeId,
+
+          name,
+
+          email,
+
+          kitchen,
+
+          role,
+
+          password: hashPassword,
+        });
+
+        success++;
+      } catch (err) {
+        failed++;
+
+        errors.push({
+          row: i + 2,
+
+          message: err.message,
+        });
+      }
+    }
+
+    fs.unlinkSync(req.file.path);
+
+    res.json({
+      success: true,
+
+      imported: success,
+
+      failed,
+
+      errors,
+    });
+  } catch (err) {
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+exports.downloadTemplate = async (req, res) => {
+  const data = [
+    {
+      EmployeeID: "EOC001",
+
+      Name: "Nguyen Van A",
+
+      Email: "a@company.com",
+
+      Kitchen: "K1",
+
+      Role: "guest",
+
+      Language: "vi",
+    },
+  ];
+
+  const workbook = XLSX.utils.book_new();
+
+  const worksheet = XLSX.utils.json_to_sheet(data);
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+
+    worksheet,
+
+    "Users",
+  );
+
+  const buffer = XLSX.write(
+    workbook,
+
+    {
+      type: "buffer",
+
+      bookType: "xlsx",
+    },
+  );
+
+  res.setHeader(
+    "Content-Disposition",
+
+    "attachment; filename=User_Template.xlsx",
+  );
+
+  res.setHeader(
+    "Content-Type",
+
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+
+  res.send(buffer);
+};

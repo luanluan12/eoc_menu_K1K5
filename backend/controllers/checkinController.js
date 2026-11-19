@@ -1,0 +1,274 @@
+const crypto = require("crypto");
+const QRCode = require("qrcode");
+const moment = require("moment-timezone");
+const Order = require("../models/Order");
+const User = require("../models/User");
+
+const CheckinToken = require("../models/CheckinToken");
+
+exports.getTodayQr = async (req, res) => {
+  try {
+    let checkin = await CheckinToken.findOne({
+      kitchen: req.user.kitchen,
+    });
+
+    if (!checkin) {
+      checkin = await CheckinToken.create({
+        kitchen: req.user.kitchen,
+
+        token: crypto.randomUUID(),
+
+        active: true,
+      });
+    } else {
+    }
+
+    const qrImage = await QRCode.toDataURL(
+      JSON.stringify({
+        token: checkin.token,
+      }),
+    );
+
+    return res.json({
+      success: true,
+
+      data: {
+        kitchen: req.user.kitchen,
+
+        token: checkin.token,
+
+        qrImage,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
+
+exports.getTodayCheckins = async (req, res) => {
+  try {
+    const startOfDay = moment().tz("Asia/Ho_Chi_Minh").startOf("day");
+    const endOfDay = startOfDay.clone().add(1, "day");
+
+    const users = await User.find({
+      kitchen: req.user.kitchen,
+    }).select("_id");
+
+    const orders = await Order.find({
+      status: "ordered",
+      user: { $in: users.map((user) => user._id) },
+      days: {
+        $elemMatch: {
+          date: {
+            $gte: startOfDay.toDate(),
+            $lt: endOfDay.toDate(),
+          },
+          received: true,
+        },
+      },
+    }).populate("user", "name email kitchen employeeId");
+
+    const checkins = orders
+      .map((order) => {
+        const day = order.days.find(
+          (item) =>
+            item.received &&
+            moment(item.date).tz("Asia/Ho_Chi_Minh").isSame(startOfDay, "day"),
+        );
+
+        if (!day || !order.user) return null;
+
+        return {
+          orderId: order._id,
+          employee: {
+            name: order.user.name,
+            email: order.user.email,
+            kitchen: order.user.kitchen,
+            employeeId: order.user.employeeId,
+          },
+          receivedAt: day.receivedAt,
+          mains: day.mains,
+          drink: day.drink,
+          soup: day.soup,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
+
+    return res.json({
+      success: true,
+      data: checkins,
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+exports.checkIn = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: "Thiếu token.",
+      });
+    }
+
+    const today = moment().tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD");
+
+    // ======================
+    // Kiểm tra QR
+    // ======================
+
+    const checkin = await CheckinToken.findOne({
+      token,
+
+      active: true,
+    });
+
+    if (!checkin) {
+      return res.status(400).json({
+        success: false,
+        message: "QR không hợp lệ",
+      });
+    }
+
+    // ======================
+    // Tìm Order
+    // ======================
+
+    const startOfToday = moment()
+      .tz("Asia/Ho_Chi_Minh")
+      .startOf("day")
+      .toDate();
+
+    const startOfTomorrow = moment()
+      .tz("Asia/Ho_Chi_Minh")
+      .add(1, "day")
+      .startOf("day")
+      .toDate();
+
+    const order = await Order.findOne({
+      user: req.user.id,
+      status: "ordered",
+      days: {
+        $elemMatch: {
+          date: {
+            $gte: startOfToday,
+            $lt: startOfTomorrow,
+          },
+        },
+      },
+    }).populate("user", "name email kitchen employeeId");
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy đơn cho hôm nay.",
+      });
+    }
+
+    if (checkin.kitchen !== order.user.kitchen) {
+      return res.status(403).json({
+        success: false,
+        message: "QR không thuộc bếp của bạn.",
+      });
+    }
+
+    // ======================
+    // Tìm ngày hôm nay
+    // ======================
+
+    const day = order.days.find((d) => {
+      return (
+        moment(d.date)
+          .tz("Asia/Ho_Chi_Minh")
+
+          .format("YYYY-MM-DD") === today
+      );
+    });
+
+    if (!day) {
+      return res.status(400).json({
+        success: false,
+        message: "Hôm nay không có suất ăn.",
+      });
+    }
+
+    const hasMeal = day.mains.length > 0 || day.drink || day.soup;
+
+    if (!hasMeal) {
+      return res.status(400).json({
+        success: false,
+        message: "Bạn không đăng ký suất ăn hôm nay.",
+      });
+    }
+
+    if (day.received) {
+      return res.status(409).json({
+        success: false,
+        message: "Bạn đã nhận suất ăn.",
+      });
+    }
+
+    day.received = true;
+
+    day.receivedAt = new Date();
+
+    await order.save();
+    const io = req.app.get("io");
+
+    io.emit("checkin-success", {
+      orderId: order._id,
+      employee: {
+        name: order.user.name,
+
+        email: order.user.email,
+
+        kitchen: order.user.kitchen,
+
+        employeeId: order.user.employeeId,
+      },
+
+      receivedAt: day.receivedAt,
+
+      mains: day.mains,
+
+      drink: day.drink,
+
+      soup: day.soup,
+    });
+
+    return res.json({
+      success: true,
+      message: "Check-in thành công.",
+      data: {
+        date: day.date,
+        receivedAt: day.receivedAt,
+        mains: day.mains,
+        drink: day.drink,
+        soup: day.soup,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+
+      message: err.message,
+    });
+  }
+};
