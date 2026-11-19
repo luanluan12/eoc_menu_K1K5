@@ -21,7 +21,7 @@ module.exports = (user, order, language = "vi") => {
         day.mains.forEach((food) => {
           html += `
                     <div>
-                        ${food.name}
+                        ${food.mealPeriod === "lunch" ? "[Trưa] " : food.mealPeriod === "dinner" ? "[Chiều] " : ""}${food.name}
                         ${food.quantity > 1 ? ` x${food.quantity}` : ""}
                     </div>
                 `;

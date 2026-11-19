@@ -3,8 +3,10 @@ import { CheckCircle2, QrCode, X } from "lucide-react";
 import { toast } from "react-toastify";
 import socket from "../../socket";
 import { getTodayCheckins, getTodayQr } from "../../api/checkinApi";
+import { useTranslation } from "react-i18next";
 
 function CheckinQrModal({ open, onClose }) {
+  const { i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [loadingCheckins, setLoadingCheckins] = useState(true);
   const [qr, setQr] = useState(null);
@@ -234,7 +236,7 @@ function CheckinQrModal({ open, onClose }) {
                           <div className="mt-3 space-y-1 border-t pt-3 text-base text-xl font-medium text-slate-700">
                             {item.mains?.map((food, i) => (
                               <div key={i}>
-                                {food.name}
+                                {food.mealPeriod === "lunch" ? "[Trưa] " : food.mealPeriod === "dinner" ? "[Chiều] " : ""}{i18n.language === "en" ? (food.nameEn || food.name) : food.name}
                                 {food.quantity > 1 && ` × ${food.quantity}`}
                               </div>
                             ))}

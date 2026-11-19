@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 function OrderDetailModal({
@@ -7,6 +9,7 @@ function OrderDetailModal({
 
   onClose,
 }) {
+  const { i18n } = useTranslation();
   if (!open || !order) return null;
 
   const image = (path) => {
@@ -78,7 +81,7 @@ function OrderDetailModal({
                     />
 
                     <div className="flex-1 text-sm sm:text-base">
-                      {dish.name}
+                      {dish.mealPeriod === "lunch" ? "[Trưa] " : dish.mealPeriod === "dinner" ? "[Chiều] " : ""}{dish.category ? `${({ rice: "Món cơm", vegetarian: "Món chay", noodles: "Món nước", soup: "Món soup" })[dish.category]} · ` : ""}{i18n.language === "en" ? (dish.nameEn || dish.name) : dish.name}
                     </div>
 
                     <div className="font-semibold">x{dish.quantity}</div>

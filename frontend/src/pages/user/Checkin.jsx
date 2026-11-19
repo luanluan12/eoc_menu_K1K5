@@ -19,7 +19,7 @@ function Checkin() {
   const [loading, setLoading] = useState(false);
 
   const [success, setSuccess] = useState(false);
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [checkinData, setCheckinData] = useState(null);
 
@@ -151,7 +151,7 @@ function Checkin() {
             <ul className="space-y-2">
               {checkinData.mains.map((m, i) => (
                 <li key={i}>
-                  {m.name}
+                  {m.mealPeriod === "lunch" ? "[Trưa] " : m.mealPeriod === "dinner" ? "[Chiều] " : ""}{i18n.language === "en" ? (m.nameEn || m.name) : m.name}
                   {m.quantity > 1 && ` x${m.quantity}`}
                 </li>
               ))}

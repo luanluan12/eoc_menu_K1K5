@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import bepImage from "../assets/anh-optimized.png";
 
-function OrderNotice() {
+function OrderNotice({ flexible = false }) {
 
     const { t } = useTranslation();
 
@@ -65,6 +65,8 @@ function OrderNotice() {
 
                     <p className="text-base font-semibold leading-7 text-slate-800 sm:text-lg">
 
+                        {flexible ? t("notice_flexible") : <>
+
                         {t("notice_prefix")}
 
                         <span className="text-blue-500">
@@ -84,6 +86,8 @@ function OrderNotice() {
                             {t("notice_side")}
 
                         </span>
+
+                        </>}
 
                     </p>
 

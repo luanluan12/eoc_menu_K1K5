@@ -87,6 +87,7 @@ const buildOrderDays = (menu, days) => {
       throw new Error(`Ngày ${i + 1} đã đóng đặt món.`);
     }
 
+    const hasFlexibleSelections = mains.some((item) => item.mealPeriod);
     const totalGroup = Number(hasMain) + Number(hasDrink) + Number(hasSoup);
 
     // Không chọn gì => nghỉ ăn
@@ -109,7 +110,7 @@ const buildOrderDays = (menu, days) => {
     }
 
     // Chỉ được chọn tối đa 1 nhóm
-    if (totalGroup > 1) {
+    if (!hasFlexibleSelections && totalGroup > 1) {
       throw new Error(`Ngày ${i + 1}: Chỉ được chọn 1 nhóm.`);
     }
 
@@ -126,12 +127,16 @@ const buildOrderDays = (menu, days) => {
         0,
       );
 
-      if (totalQuantity > 2) {
+      if (!hasFlexibleSelections && totalQuantity > 2) {
         throw new Error(`Ngày ${i + 1}: Tối đa 2 phần.`);
       }
 
       for (const item of mains) {
-        const dish = menuDay.mains.id(item.dishId);
+        const category = item.category;
+        const period = item.mealPeriod;
+        const dish = period
+          ? menuDay.meals?.[period]?.[category]?.find((candidate) => String(candidate._id) === String(item.dishId))
+          : menuDay.mains.id(item.dishId);
 
         if (!dish) {
           throw new Error(`Ngày ${i + 1}: Món cơm không tồn tại.`);
@@ -142,9 +147,13 @@ const buildOrderDays = (menu, days) => {
 
           name: dish.name,
 
+          nameEn: dish.nameEn || "",
+
           image: dish.image,
 
           quantity: item.quantity,
+          mealPeriod: period || "",
+          category: category || "",
         });
       }
     }

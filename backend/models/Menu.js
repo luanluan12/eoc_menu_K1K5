@@ -140,6 +140,10 @@ const dayMenuSchema = new mongoose.Schema({
 
         default: []
 
+    },
+
+    meals: {
+        type: mongoose.Schema.Types.Mixed,
     }
 
 }, {

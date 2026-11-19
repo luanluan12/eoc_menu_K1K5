@@ -49,6 +49,12 @@ function WeekMenuEditor({
       },
 
       mains: day.mains || [],
+      meals: day.meals || {
+        lunch: {
+          rice: day.mains || [], vegetarian: [], noodles: day.drinks || [], soup: day.soups || [],
+        },
+        dinner: { rice: [], vegetarian: [], noodles: [], soup: [] },
+      },
     }));
 
     if (loadedDays.length === 5) {
@@ -57,6 +63,7 @@ function WeekMenuEditor({
       loadedDays.push({
         date: saturday,
         mains: [],
+        meals: { lunch: { rice: [], vegetarian: [], noodles: [], soup: [] }, dinner: { rice: [], vegetarian: [], noodles: [], soup: [] } },
         drink: { name: "", image: null },
         soup: { name: "", image: null },
         orderingClosed: false,
@@ -182,6 +189,7 @@ function WeekMenuEditor({
         date,
 
         mains: [],
+        meals: { lunch: { rice: [], vegetarian: [], noodles: [], soup: [] }, dinner: { rice: [], vegetarian: [], noodles: [], soup: [] } },
 
         drink: {
           name: "",
@@ -287,6 +295,10 @@ function WeekMenuEditor({
 
         return {
           ...day,
+          meals: sourceDay.meals || {
+            lunch: { rice: sourceDay.mains || [], vegetarian: [], noodles: sourceDay.drinks || [], soup: sourceDay.soups || [] },
+            dinner: { rice: [], vegetarian: [], noodles: [], soup: [] },
+          },
           mains: (sourceDay.mains || []).map(cloneDish),
           drink: sourceDay.drinks?.[0]
             ? cloneDish(sourceDay.drinks[0])
@@ -314,37 +326,6 @@ function WeekMenuEditor({
 
       return;
     }
-    for (const day of days) {
-      // Main
-      for (const dish of day.mains) {
-        if (!dish.name?.trim()) {
-          alert(`${day.name}: Vui lòng nhập tên món.`);
-          return;
-        }
-
-        if (!dish.image) {
-          alert(`${day.name}: ${dish.name || "Món chính"} chưa có ảnh.`);
-          return;
-        }
-      }
-
-      // Drink
-      if (day.drink?.name?.trim()) {
-        if (!day.drink.image) {
-          alert(`${day.name}: ${day.drink.name} chưa có ảnh.`);
-          return;
-        }
-      }
-
-      // Soup
-      if (day.soup?.name?.trim()) {
-        if (!day.soup.image) {
-          alert(`${day.name}: ${day.soup.name} chưa có ảnh.`);
-          return;
-        }
-      }
-    }
-
     const formData = new FormData();
 
     // ========================
@@ -427,6 +408,13 @@ function WeekMenuEditor({
         : [],
 
       desserts: [],
+      meals: Object.fromEntries(["lunch", "dinner"].map((period) => [period, Object.fromEntries(["rice", "vegetarian", "noodles", "soup"].map((category) => [category, (day.meals?.[period]?.[category] || []).map((dish) => ({
+        _id: dish._id,
+        name: typeof dish === "string" ? dish : dish.name || "",
+        nameEn: dish.nameEn || "",
+        image: dish.image instanceof File ? "" : dish.image || "",
+        imagePublicId: dish.imagePublicId || "",
+      }))]))])),
     }));
 
     console.log("DAYS", JSON.stringify(days, null, 2));
@@ -473,6 +461,16 @@ function WeekMenuEditor({
           day.soup.image,
         );
       }
+
+      ["lunch", "dinner"].forEach((period) => {
+        ["rice", "vegetarian", "noodles", "soup"].forEach((category) => {
+          (day.meals?.[period]?.[category] || []).forEach((dish, dishIndex) => {
+            if (dish.image instanceof File) {
+              formData.append(`meal_${dayIndex}_${period}_${category}_${dishIndex}_image`, dish.image);
+            }
+          });
+        });
+      });
     });
 
     console.log(JSON.stringify(jsonDays, null, 2));

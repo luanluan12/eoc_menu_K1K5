@@ -253,6 +253,10 @@ const confirmPublish = async () => {
 
                 day.desserts?.some(item =>
                     item.name.toLowerCase().includes(value)
+                ) || Object.values(day.meals || {}).some((period) =>
+                    Object.values(period || {}).some((items) =>
+                        items?.some((item) => (item.name || "").toLowerCase().includes(value))
+                    )
                 )
 
             )

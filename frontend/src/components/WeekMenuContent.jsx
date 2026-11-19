@@ -207,6 +207,23 @@ function WeekMenuContent({
   const isSoupSelected = (dishId) =>
     String(orders[currentDay]?.soup?.dishId || "") === String(dishId);
 
+  const toggleFlexibleDish = (dish, mealPeriod, category) => {
+    if (!editable) return;
+    const clone = [...orders];
+    const current = { ...clone[currentDay] };
+    const selected = [...(current.mains || [])];
+    const index = selected.findIndex((item) => String(item.dishId) === String(dish._id));
+    if (index >= 0) selected.splice(index, 1);
+    else selected.push({ dishId: dish._id, name: dish.name || "", nameEn: dish.nameEn || "", image: dish.image || "", quantity: 1, mealPeriod, category });
+    current.mains = selected;
+    current.drink = null;
+    current.soup = null;
+    clone[currentDay] = current;
+    setOrders(clone);
+  };
+  const isFlexibleSelected = (dishId) =>
+    (orders[currentDay]?.mains || []).some((item) => String(item.dishId) === String(dishId));
+
   const disableMain = () =>
     isDayClosed || !!orders[currentDay]?.drink || !!orders[currentDay]?.soup;
 
@@ -290,6 +307,8 @@ function WeekMenuContent({
 
     // Validate
     for (const day of orders) {
+      const hasFlexible = day.mains.some((item) => item.mealPeriod);
+      if (hasFlexible) continue;
       const hasMain = day.mains.length > 0;
 
       const hasDrink = !!day.drink;
@@ -422,10 +441,24 @@ function WeekMenuContent({
       )}
       {!isReadonly && (
         <div className="mb-10">
-          <OrderNotice />
+          <OrderNotice flexible={Boolean(day.meals)} />
         </div>
       )}
 
+      {day.meals ? (
+        <div className="space-y-10">
+          {[["lunch", t("meal_lunch")], ["dinner", t("meal_dinner")]].map(([period, periodLabel]) => (
+            <section key={period} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
+              <h2 className="mb-6 text-xl font-bold text-slate-800">{periodLabel}</h2>
+              <div className="space-y-8">
+                {[["rice", t("meal_rice")], ["vegetarian", t("meal_vegetarian")], ["noodles", t("meal_noodles")], ["soup", t("meal_soup")]].map(([category, label]) => (
+                  <FoodGroup key={category} title={label} subtitle={t("choose_multiple")} foods={(day.meals?.[period]?.[category] || []).filter((dish) => dish.name?.trim())} type="drink" disabled={expired || isDayClosed || !editable} selected={isFlexibleSelected} onSelect={(dish) => toggleFlexibleDish(dish, period, category)} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : <>
       {/* Món cơm */}
 
       <FoodGroup
@@ -479,6 +512,7 @@ function WeekMenuContent({
           />
         </div>
       )}
+      </>}
 
       {!isReadonly && (
         <div className="mt-14 flex justify-center">

@@ -112,7 +112,7 @@ function History() {
 
       <div className="px-3 pb-4">
         <h3 className="min-h-[42px] text-center text-[16px] font-semibold text-slate-800">
-          {dish.name}
+          {i18n.language === "en" ? (dish.nameEn || dish.name) : dish.name}
         </h3>
 
         <div className="mt-2 text-center text-xs font-medium text-gray-500">
@@ -240,7 +240,7 @@ function History() {
                           key={dish.dishId || dish.name}
                           dish={dish}
                           quantity={dish.quantity}
-                          type={t("main_dish")}
+                          type={`${dish.mealPeriod === "lunch" ? "Trưa" : dish.mealPeriod === "dinner" ? "Chiều" : t("main_dish")} · ${({ rice: "Món cơm", vegetarian: "Món chay", noodles: "Món nước", soup: "Món soup" })[dish.category] || t("main_dish")}`}
                         />
                       ))}
 

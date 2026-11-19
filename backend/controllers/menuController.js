@@ -7,6 +7,30 @@ const { copyMenuImage, deleteMenuImage } = require("../services/r2Storage");
 const Order = require("../models/Order");
 const { createOrderToken } = require("../utils/orderToken");
 const getFrontendUrl = require("../utils/frontendUrl");
+const mongoose = require("mongoose");
+
+const normalizeMeals = async (meals = {}, resolveImage = async (_period, _category, _index, item) => ({ image: item?.image || "", imagePublicId: item?.imagePublicId || "" })) => {
+  const result = {};
+  for (const period of ["lunch", "dinner"]) {
+    result[period] = {};
+    for (const category of ["rice", "vegetarian", "noodles", "soup"]) {
+      result[period][category] = await Promise.all((meals?.[period]?.[category] || []).map(async (item, index) => {
+        const imageInfo = await resolveImage(period, category, index, item);
+        return {
+          _id: item?._id || new mongoose.Types.ObjectId(),
+          name: typeof item === "string" ? item : item?.name || "",
+          nameEn: item?.nameEn || "",
+          image: imageInfo.image || "",
+          imagePublicId: imageInfo.imagePublicId || "",
+          subtitle: item?.subtitle || "",
+          subtitleEn: item?.subtitleEn || "",
+          category,
+        };
+      }));
+    }
+  }
+  return result;
+};
 
 exports.createMenu = async (req, res) => {
   try {
@@ -168,6 +192,8 @@ exports.createMenu = async (req, res) => {
         soups,
 
         desserts,
+
+        meals: await normalizeMeals(day.meals, (period, category, index, item) => getImage(`meal_${dayIndex}_${period}_${category}_${index}_image`, item)),
       };
     }));
 
@@ -479,9 +505,28 @@ exports.updateMenu = async (req, res) => {
           soups,
 
           desserts,
+
+          meals: await normalizeMeals(day.meals, (period, category, index, item) => getImage(
+            `meal_${dayIndex}_${period}_${category}_${index}_image`,
+            item?.image || "",
+            item?.imagePublicId || "",
+          )),
         };
       }),
     );
+
+    for (const [dayIndex, oldDay] of menu.days.entries()) {
+      for (const period of ["lunch", "dinner"]) {
+        for (const category of ["rice", "vegetarian", "noodles", "soup"]) {
+          const keptIds = new Set((resultDays[dayIndex]?.meals?.[period]?.[category] || []).map((dish) => dish.imagePublicId).filter(Boolean));
+          for (const oldDish of oldDay.meals?.[period]?.[category] || []) {
+            if (oldDish.imagePublicId && !keptIds.has(oldDish.imagePublicId)) {
+              await destroyImage(oldDish.imagePublicId);
+            }
+          }
+        }
+      }
+    }
 
     menu.week = week || menu.week;
 
@@ -608,7 +653,6 @@ exports.publishMenu = async (req, res) => {
 
     let sent = 0;
 
-    // Gửi Email
     for (const user of users) {
       try {
         const language = (user.language || "vi").toLowerCase();

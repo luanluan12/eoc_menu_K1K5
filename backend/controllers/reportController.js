@@ -60,7 +60,8 @@ function getFoodName(day) {
 
   (day.mains || []).forEach((item) => {
     if (item.quantity > 0) {
-      foods.push(`${item.name} x${item.quantity}`);
+      const meal = item.mealPeriod === "lunch" ? "Trưa" : item.mealPeriod === "dinner" ? "Chiều" : "";
+      foods.push(`${meal ? `[${meal}] ` : ""}${item.name} x${item.quantity}`);
     }
   });
 
@@ -73,6 +74,20 @@ function getFoodName(day) {
   }
 
   return foods.join(", ");
+}
+
+function getMenuMainDishes(day) {
+  const flexible = [];
+  for (const period of ["lunch", "dinner"]) {
+    for (const category of ["rice", "vegetarian", "noodles", "soup"]) {
+      const periodLabel = period === "lunch" ? "Trưa" : "Chiều";
+      const categoryLabels = { rice: "Món cơm", vegetarian: "Món chay", noodles: "Món nước", soup: "Món soup" };
+      for (const dish of day?.meals?.[period]?.[category] || []) {
+        flexible.push({ ...dish.toObject?.() || dish, name: `[${periodLabel} · ${categoryLabels[category]}] ${dish.name || ""}` });
+      }
+    }
+  }
+  return [...(day?.mains || []), ...flexible];
 }
 
 // ======================================================
@@ -129,7 +144,7 @@ exports.exportDailyExcel = async (req, res) => {
 
     const headers = [];
 
-    (selectedDay.mains || []).forEach((item) => {
+    getMenuMainDishes(selectedDay).forEach((item) => {
       headers.push({
         type: "main",
 
@@ -587,7 +602,7 @@ exports.getDailyReport = async (req, res) => {
 
     const headers = [];
 
-    (selectedDay.mains || []).forEach((item) => {
+    getMenuMainDishes(selectedDay).forEach((item) => {
       headers.push({
         type: "main",
 
@@ -836,7 +851,7 @@ exports.getLeftoverReport = async (req, res) => {
 
     const headers = [];
 
-    (selectedDay.mains || []).forEach((item) => {
+    getMenuMainDishes(selectedDay).forEach((item) => {
       headers.push({
         type: "main",
         id: String(item._id),
@@ -1718,7 +1733,7 @@ exports.exportLeftoverExcel = async (req, res) => {
 
     const headers = [];
 
-    (selectedDay.mains || []).forEach((item) => {
+    getMenuMainDishes(selectedDay).forEach((item) => {
       headers.push({
         type: "main",
         id: String(item._id),

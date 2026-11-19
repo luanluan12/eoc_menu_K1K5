@@ -22,6 +22,8 @@ const mainSelectionSchema = new mongoose.Schema({
 
     },
 
+    nameEn: { type: String, default: "" },
+
     image: {
 
         type: String,
@@ -36,11 +38,13 @@ const mainSelectionSchema = new mongoose.Schema({
 
         min: 1,
 
-        max: 2,
-
         default: 1
 
-    }
+    },
+
+    mealPeriod: { type: String, enum: ["lunch", "dinner", ""], default: "" },
+
+    category: { type: String, enum: ["rice", "vegetarian", "noodles", "soup", ""], default: "" }
 
 }, {
 
