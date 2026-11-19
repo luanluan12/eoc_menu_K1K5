@@ -200,11 +200,11 @@ const menuSchema = new mongoose.Schema({
 
             validator(value) {
 
-                return value.length === 5;
+                return value.length === 5 || value.length === 6;
 
             },
 
-            message: "Một tuần phải có đúng 5 ngày."
+            message: "Menu phải có 5 hoặc 6 ngày."
 
         }
 

@@ -218,7 +218,7 @@ function WeekMenuContent({
   // =========================
 
   const getUnselectedDays = () => {
-    const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday"];
+    const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
     return orders
       .map((order, index) => {

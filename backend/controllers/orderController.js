@@ -58,11 +58,15 @@ const saveNewOrCancelledOrder = async ({ existingOrder, userId, menu, days }) =>
 const buildOrderDays = (menu, days) => {
   const result = [];
 
-  if (!Array.isArray(days) || days.length !== 5) {
-    throw new Error("Phải có đủ 5 ngày.");
+  if (
+    !Array.isArray(days) ||
+    ![5, 6].includes(days.length) ||
+    days.length !== menu.days.length
+  ) {
+    throw new Error("Số ngày đặt món phải khớp với menu.");
   }
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < menu.days.length; i++) {
     const menuDay = menu.days[i];
 
     const userDay = days[i];
@@ -1006,7 +1010,7 @@ exports.getAllOrders = async (req, res) => {
       const startOfDay = moment.tz(date, "YYYY-MM-DD", "Asia/Ho_Chi_Minh");
       const endOfDay = startOfDay.clone().add(1, "day");
 
-      // Lọc ngay tại MongoDB nhưng vẫn trả đủ 5 ngày để cửa sổ xem chi tiết
+      // Lọc ngay tại MongoDB nhưng vẫn trả đủ 6 ngày để cửa sổ xem chi tiết
       // và các thao tác hiện tại tiếp tục hoạt động như trước.
       filter.days = {
         $elemMatch: {

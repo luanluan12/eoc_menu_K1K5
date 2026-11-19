@@ -43,10 +43,8 @@ function OrderManagement() {
 
     const dayOfWeek = today.getDay();
 
-    // Test giống backend
+    // Cuối tuần không có suất ăn: Chủ nhật lùi về thứ Bảy gần nhất.
     if (dayOfWeek === 0) {
-      today.setDate(today.getDate() - 2);
-    } else if (dayOfWeek === 6) {
       today.setDate(today.getDate() - 1);
     }
 

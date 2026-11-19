@@ -51,6 +51,18 @@ function WeekMenuEditor({
       mains: day.mains || [],
     }));
 
+    if (loadedDays.length === 5) {
+      const saturday = new Date(loadedDays[4].date);
+      saturday.setDate(saturday.getDate() + 1);
+      loadedDays.push({
+        date: saturday,
+        mains: [],
+        drink: { name: "", image: null },
+        soup: { name: "", image: null },
+        orderingClosed: false,
+      });
+    }
+
     setDays(loadedDays);
 
     setCurrentDay(0);
@@ -155,11 +167,11 @@ function WeekMenuEditor({
       Number(weekNumber),
     );
 
-    const names = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu"];
+    const names = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy"];
 
     const list = [];
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 6; i++) {
       const date = new Date(monday);
 
       date.setDate(monday.getDate() + i);

@@ -44,11 +44,11 @@ exports.createMenu = async (req, res) => {
       });
     }
 
-    if (days.length !== 5) {
+    if (days.length !== 6) {
       return res.status(400).json({
         success: false,
 
-        message: "Một tuần phải có đúng 5 ngày.",
+        message: "Một tuần phải có đúng 6 ngày.",
       });
     }
 
@@ -292,11 +292,11 @@ exports.updateMenu = async (req, res) => {
       });
     }
 
-    if (days.length !== 5) {
+    if (![5, 6].includes(days.length)) {
       return res.status(400).json({
         success: false,
 
-        message: "Một tuần phải có đúng 5 ngày.",
+        message: "Menu phải có 5 hoặc 6 ngày.",
       });
     }
     const findFile = (fieldName) => {

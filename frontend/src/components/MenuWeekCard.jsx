@@ -13,7 +13,7 @@ function MenuWeekCard({
 }) {
   const firstDay = menu.days?.[0]?.date;
 
-  const lastDay = menu.days?.[4]?.date;
+  const lastDay = menu.days?.[menu.days.length - 1]?.date;
 
   const statusColor = {
     draft: "bg-blue-100 text-blue-700",

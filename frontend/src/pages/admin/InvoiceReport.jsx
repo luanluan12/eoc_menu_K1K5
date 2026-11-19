@@ -11,15 +11,15 @@ function InvoiceReport() {
 
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
 
-  const friday = new Date(monday);
+  const saturday = new Date(monday);
 
-  friday.setDate(monday.getDate() + 4);
+  saturday.setDate(monday.getDate() + 5);
 
   const formatInput = (date) => date.toISOString().split("T")[0];
 
   const [from, setFrom] = useState(formatInput(monday));
 
-  const [to, setTo] = useState(formatInput(friday));
+  const [to, setTo] = useState(formatInput(saturday));
 
   const [loading, setLoading] = useState(false);
 
