@@ -21,6 +21,16 @@ import {
     setDayOrderingClosed,
 } from "../../api/menuApi";
 
+const getMenuDateRange = (menu) => {
+    const first = menu.days?.[0]?.date;
+    const last = menu.days?.[menu.days.length - 1]?.date;
+    if (!first || !last) return "";
+    const format = (value) => new Date(value).toLocaleDateString("vi-VN", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+    });
+    return `${format(first)} – ${format(last)}`;
+};
+
 function MenuManagement() {
     const [menus, setMenus] = useState([]);
     const [filteredMenus, setFilteredMenus] = useState([]);
@@ -359,8 +369,8 @@ const confirmPublish = async () => {
                                     >
 
                                         <td className="px-4 py-3 font-semibold">
-
-                                            {menu.week}
+                                            <div>{menu.week}</div>
+                                            <div className="mt-1 text-xs font-normal text-slate-500">{getMenuDateRange(menu)}</div>
 
                                         </td>
 
@@ -517,6 +527,8 @@ const confirmPublish = async () => {
                                 Năm {menu.year}
 
                             </p>
+
+                            <p className="mt-1 text-xs text-slate-500">{getMenuDateRange(menu)}</p>
 
                         </div>
 
