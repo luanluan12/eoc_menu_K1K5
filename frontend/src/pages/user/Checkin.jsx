@@ -15,8 +15,7 @@ function Checkin() {
   const canvasRef = useRef(null);
 
   const intervalRef = useRef(null);
-
-  const [loading, setLoading] = useState(false);
+  const scanInProgressRef = useRef(false);
 
   const [success, setSuccess] = useState(false);
   const { t, i18n } = useTranslation();
@@ -36,7 +35,7 @@ function Checkin() {
   }, []);
 
   const scanFrame = async () => {
-    if (loading || success) return;
+    if (scanInProgressRef.current || success) return;
 
     const webcam = webcamRef.current;
 
@@ -87,8 +86,7 @@ function Checkin() {
     if (!qr) return;
 
     clearInterval(intervalRef.current);
-
-    setLoading(true);
+    scanInProgressRef.current = true;
 
     try {
       let token = "";
@@ -109,15 +107,9 @@ function Checkin() {
 
       setSuccess(true);
     } catch (err) {
-      toast.error(err.response?.data?.message || t("checkin_failed"));
-
-      intervalRef.current = setInterval(
-        scanFrame,
-
-        300,
-      );
-    } finally {
-      setLoading(false);
+      const message = err.response?.data?.message || t("checkin_failed");
+      toast.error(message);
+      navigate(-1);
     }
   };
 
