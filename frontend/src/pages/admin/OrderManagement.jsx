@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   deleteOrder,
   getOrderById,
@@ -96,6 +96,31 @@ function OrderManagement() {
       order.user?.employeeId?.toLowerCase().includes(key)
     );
   });
+  const orderPeriods = [
+    { id: "lunch", label: "Buổi trưa" },
+    { id: "dinner", label: "Buổi chiều" },
+  ];
+  const getMainsForPeriod = (day, period) =>
+    (day?.mains || []).filter((main) =>
+      period === "lunch"
+        ? !main.mealPeriod || main.mealPeriod === "lunch"
+        : main.mealPeriod === "dinner",
+    );
+  const getOrdersForPeriod = (period) =>
+    filteredOrders.filter((order) => {
+      const day = order.selectedDay;
+      return (
+        getMainsForPeriod(day, period).length > 0 ||
+        (period === "lunch" && (day?.drink || day?.soup))
+      );
+    });
+  const isReceivedForPeriod = (day, period) => {
+    const periodReceived = period === "lunch" ? day?.receivedLunch : day?.receivedDinner;
+    if (periodReceived) return true;
+
+    // Compatibility with older records that only have the whole-day flag.
+    return Boolean(day?.received && !day?.receivedLunch && !day?.receivedDinner);
+  };
 
   const exportExcel = () => {
     const data = orders.map((order, index) => {
@@ -353,11 +378,25 @@ function OrderManagement() {
                 </td>
               </tr>
             ) : (
-              filteredOrders.map((order, index) => {
-                const todayOrder = order.selectedDay;
-
+              orderPeriods.map((period) => {
+                const periodOrders = getOrdersForPeriod(period.id);
                 return (
-                  <tr key={order._id} className="border-t hover:bg-gray-50">
+                  <Fragment key={period.id}>
+                    <tr className="border-t bg-blue-50">
+                      <td colSpan={8} className="px-4 py-3 font-bold text-blue-800">
+                        {period.label} <span className="font-medium">({periodOrders.length} đơn)</span>
+                      </td>
+                    </tr>
+                    {periodOrders.map((order, index) => {
+                      const todayOrder = order.selectedDay;
+                      const received = isReceivedForPeriod(todayOrder, period.id);
+                      const periodReceivedAt = period.id === "lunch"
+                        ? todayOrder?.receivedLunchAt
+                        : todayOrder?.receivedDinnerAt;
+                      const mains = getMainsForPeriod(todayOrder, period.id);
+
+                      return (
+                  <tr key={`${period.id}-${order._id}`} className="border-t hover:bg-gray-50">
                     <td className="p-4">{index + 1}</td>
 
                     <td className="p-4">{order.user?.name}</td>
@@ -371,24 +410,20 @@ function OrderManagement() {
                     <td className="p-4 text-center">
                       <span
                         title={
-                          todayOrder?.receivedAt
-                            ? new Date(todayOrder.receivedAt).toLocaleString(
+                          periodReceivedAt || (received ? todayOrder?.receivedAt : null)
+                            ? new Date(periodReceivedAt || todayOrder.receivedAt).toLocaleString(
                                 "vi-VN",
                               )
                             : ""
                         }
-                        className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                          todayOrder?.received
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
+                        className={`rounded-full px-3 py-1 text-sm font-semibold ${received ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}
                       >
-                        {todayOrder?.received ? "Đã nhận" : "Chưa nhận"}
+                        {received ? "Đã nhận" : "Chưa nhận"}
                       </span>
                     </td>
 
                     <td className="p-4 text-center">
-                      {todayOrder?.received ? (
+                      {received ? (
                         <span className="inline-flex items-center gap-1 rounded-lg bg-blue-100 px-3 py-2 text-sm font-semibold text-blue-700">
                           <Check size={16} />
                           Đã nhận
@@ -424,6 +459,16 @@ function OrderManagement() {
                       </div>
                     </td>
                   </tr>
+                      );
+                    })}
+                    {periodOrders.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-6 text-center text-gray-400">
+                          Chưa có đơn cho {period.label.toLowerCase()}.
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })
             )}
@@ -443,11 +488,25 @@ function OrderManagement() {
             Chưa có đơn đặt món.
           </div>
         ) : (
-          filteredOrders.map((order) => {
-            const day = order.selectedDay;
-
+          orderPeriods.map((period) => {
+            const periodOrders = getOrdersForPeriod(period.id);
             return (
-              <div key={order._id} className="rounded-2xl bg-white p-5 shadow">
+              <section key={period.id} className="space-y-3">
+                <h2 className="rounded-xl bg-blue-50 px-4 py-3 font-bold text-blue-800">
+                  {period.label} ({periodOrders.length} đơn)
+                </h2>
+                {periodOrders.length === 0 ? (
+                  <div className="rounded-xl bg-white p-5 text-center text-gray-400 shadow">
+                    Chưa có đơn cho {period.label.toLowerCase()}.
+                  </div>
+                ) : periodOrders.map((order) => {
+              const day = order.selectedDay;
+              const received = isReceivedForPeriod(day, period.id);
+              const periodReceivedAt = period.id === "lunch" ? day?.receivedLunchAt : day?.receivedDinnerAt;
+              const mains = getMainsForPeriod(day, period.id);
+
+              return (
+              <div key={`${period.id}-${order._id}`} className="rounded-2xl bg-white p-5 shadow">
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-lg font-bold">{order.user?.name}</h2>
@@ -470,20 +529,29 @@ function OrderManagement() {
                   <div className="flex justify-between">
                     <span className="text-gray-500">Trạng thái</span>
 
-                    <span>{day?.received ? "✅ Đã nhận" : "⏳ Chưa nhận"}</span>
+                    <span>{received ? "✅ Đã nhận" : "⏳ Chưa nhận"}</span>
                   </div>
 
-                  {day?.receivedAt && (
+                  {(periodReceivedAt || (received && day?.receivedAt)) && (
                     <div className="flex justify-between">
                       <span className="text-gray-500">Thời gian</span>
 
                       <span>
-                        {new Date(day.receivedAt).toLocaleString("vi-VN")}
+                        {new Date(periodReceivedAt || day.receivedAt).toLocaleString("vi-VN")}
                       </span>
                     </div>
                   )}
                 </div>
-                {!day?.received && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {mains.map((main, mainIndex) => (
+                    <span key={mainIndex} className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">
+                      {main.name}{main.quantity > 1 ? ` ×${main.quantity}` : ""}
+                    </span>
+                  ))}
+                  {period.id === "lunch" && day?.drink && <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">{day.drink.name}</span>}
+                  {period.id === "lunch" && day?.soup && <span className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700">{day.soup.name}</span>}
+                </div>
+                {!received && (
                   <button
                     disabled={processingCheckinId !== null}
                     onClick={() => handleManualCheckin(order)}
@@ -509,6 +577,9 @@ function OrderManagement() {
                   </button>
                 )}
               </div>
+              );
+            })}
+              </section>
             );
           })
         )}

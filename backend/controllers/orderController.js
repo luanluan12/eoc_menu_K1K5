@@ -9,17 +9,26 @@ const sendMail = require("../utils/mail");
 const orderSuccessTemplate = require("../utils/orderSuccessTemplate");
 const { verifyOrderToken } = require("../utils/orderToken");
 const { uploadReviewImage } = require("../services/r2Storage");
+const {
+  getMealPeriodAt,
+  getMealsForPeriod,
+  hasAnyReceivedPeriod,
+  isPeriodReceived,
+  markPeriodReceived,
+} = require("../utils/mealCheckin");
 
 // ===========================================
 // Có được phép đặt món?
 // ===========================================
 
 const canOrder = (menu) => {
-  const now = moment().tz("Asia/Ho_Chi_Minh");
-  // `published` là dấu hiệu menu đã được admin gửi. Không dùng openTime để
-  // chặn vì các menu đã publish trước khi áp dụng logic mới vẫn giữ openTime cũ.
-  return menu?.status === "published"
-    && now.isSameOrBefore(moment(menu.deadline));
+  // Tạm bỏ kiểm tra deadline để test đặt món cho tuần hiện tại.
+  // Khôi phục đoạn cũ sau khi test xong:
+  // const now = moment().tz("Asia/Ho_Chi_Minh");
+  // return menu?.status === "published"
+  //   && now.isSameOrBefore(moment(menu.deadline));
+  // Giữ menu published là điều kiện bắt buộc để khách chỉ đặt menu đã gửi.
+  return menu?.status === "published";
 };
 
 const hasSelectedMeal = (days = []) =>
@@ -83,9 +92,11 @@ const buildOrderDays = (menu, days) => {
 
     const hasSoup = !!soup;
 
-    if (menuDay.orderingClosed && (hasMain || hasDrink || hasSoup)) {
-      throw new Error(`Ngày ${i + 1} đã đóng đặt món.`);
-    }
+    // Tạm bỏ validate ngày khóa để test đặt món cho tuần hiện tại.
+    // Khôi phục sau khi test xong:
+    // if (menuDay.orderingClosed && (hasMain || hasDrink || hasSoup)) {
+    //   throw new Error(`Ngày ${i + 1} đã đóng đặt món.`);
+    // }
 
     const hasFlexibleSelections = mains.some((item) => item.mealPeriod);
     const totalGroup = Number(hasMain) + Number(hasDrink) + Number(hasSoup);
@@ -527,13 +538,14 @@ exports.updateOrder = async (req, res) => {
 
     const menu = await Menu.findById(order.menu);
 
-    if (new Date() > new Date(menu.deadline)) {
-      return res.status(400).json({
-        success: false,
-
-        message: "Đã hết thời gian chỉnh sửa.",
-      });
-    }
+    // Tạm bỏ validate deadline chỉnh sửa để test tuần hiện tại.
+    // Khôi phục sau khi test xong:
+    // if (new Date() > new Date(menu.deadline)) {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: "Đã hết thời gian chỉnh sửa.",
+    //   });
+    // }
 
     if (!menu) {
       return res.status(404).json({
@@ -614,6 +626,10 @@ exports.adminUpdateOrder = async (req, res) => {
         ...updatedDay,
         received: existingDay?.received || false,
         receivedAt: existingDay?.receivedAt || null,
+        receivedLunch: existingDay?.receivedLunch || false,
+        receivedLunchAt: existingDay?.receivedLunchAt || null,
+        receivedDinner: existingDay?.receivedDinner || false,
+        receivedDinnerAt: existingDay?.receivedDinnerAt || null,
         review: existingDay?.review || null,
       };
     });
@@ -1283,7 +1299,7 @@ const prepareBulkCancel = async ({ menuId, dates, employeeIds }) => {
 
       if (!selectedDateSet.has(date)) continue;
 
-      if (day.received) {
+      if (hasAnyReceivedPeriod(day)) {
         receivedDays.push({
           employeeId: order.user?.employeeId,
           name: order.user?.name,
@@ -1397,7 +1413,7 @@ exports.bulkCancelOrderDays = async (req, res) => {
           .tz("Asia/Ho_Chi_Minh")
           .format("YYYY-MM-DD");
 
-        if (selectedDateSet.has(date) && !day.received) {
+        if (selectedDateSet.has(date) && !hasAnyReceivedPeriod(day)) {
           value.mains = [];
           value.drink = null;
           value.soup = null;
@@ -1648,24 +1664,41 @@ exports.manualCheckin = async (req, res) => {
       });
     }
 
-    const hasMeal = day.mains.length > 0 || day.drink || day.soup;
+    const mealPeriod = getMealPeriodAt();
+
+    if (!mealPeriod) {
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ có thể check-in trong khung giờ 06:00–21:00.",
+      });
+    }
+
+    const mealData = getMealsForPeriod(day, mealPeriod);
+    const hasMeal =
+      mealData.mains.length > 0 || mealData.drink || mealData.soup;
 
     if (!hasMeal) {
       return res.status(400).json({
         success: false,
-        message: "Nhân viên không đăng ký suất ăn.",
+        message:
+          mealPeriod === "lunch"
+            ? "Nhân viên không đăng ký suất ăn buổi trưa."
+            : "Nhân viên không đăng ký suất ăn buổi chiều.",
       });
     }
 
-    if (day.received) {
+    if (isPeriodReceived(day, mealPeriod)) {
       return res.status(409).json({
         success: false,
-        message: "Nhân viên đã nhận suất ăn.",
+        message:
+          mealPeriod === "lunch"
+            ? "Nhân viên đã nhận suất ăn buổi trưa."
+            : "Nhân viên đã nhận suất ăn buổi chiều.",
       });
     }
 
-    day.received = true;
-    day.receivedAt = new Date();
+    const receivedAt = new Date();
+    markPeriodReceived(day, mealPeriod, receivedAt);
 
     await order.save();
 
@@ -1679,17 +1712,17 @@ exports.manualCheckin = async (req, res) => {
         kitchen: order.user.kitchen,
         employeeId: order.user.employeeId,
       },
-      receivedAt: day.receivedAt,
-      mains: day.mains,
-      drink: day.drink,
-      soup: day.soup,
+      receivedAt,
+      mealPeriod,
+      ...mealData,
     });
 
     return res.json({
       success: true,
       message: "Check-in thành công.",
       data: {
-        receivedAt: day.receivedAt,
+        receivedAt,
+        mealPeriod,
       },
     });
   } catch (err) {

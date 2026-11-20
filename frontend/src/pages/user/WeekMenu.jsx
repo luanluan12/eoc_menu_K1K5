@@ -94,7 +94,10 @@ function WeekMenu() {
     );
   }
 
-  const expired = new Date() > new Date(menu.deadline);
+  // Tạm bỏ validate deadline phía giao diện để test đặt món tuần hiện tại.
+  // Khôi phục sau khi test xong:
+  // const expired = new Date() > new Date(menu.deadline);
+  const expired = false;
 
   if (expired) {
     return (

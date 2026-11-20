@@ -231,7 +231,36 @@ function TabButton({ active, color, onClick, children }) {
 
 function DailyReport({ report }) {
   return (
-    <div className="space-y-8">
+    <div className="space-y-10">
+      {["lunch", "dinner"].map((period) => (
+        <DailyPeriodReport key={period} report={report} period={period} />
+      ))}
+    </div>
+  );
+}
+
+function DailyPeriodReport({ report, period }) {
+  const headers = report.headers.filter(
+    (header) => (header.mealPeriod || "lunch") === period,
+  );
+  const rows = report.rows.filter((row) =>
+    headers.some((header) => Number(row.items[header.name]) > 0),
+  );
+  const periodLabel = period === "lunch" ? "Buổi trưa" : "Buổi chiều";
+
+  if (headers.length === 0) {
+    return (
+      <section className="space-y-5 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        <h2 className="text-xl font-bold text-slate-900">{periodLabel}</h2>
+        <EmptyState text={`Menu không có món cho ${periodLabel.toLowerCase()}.`} />
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-6 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+      <h2 className="text-xl font-bold text-slate-900">{periodLabel}</h2>
+      <div className="space-y-8">
       <section>
         <div className="mb-5">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
@@ -245,7 +274,7 @@ function DailyReport({ report }) {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6">
-          {report.headers.map((header) => (
+          {headers.map((header) => (
             <div
               key={header.id}
               className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-lg sm:p-5"
@@ -284,7 +313,7 @@ function DailyReport({ report }) {
               <tr>
                 <TableHeader align="center">Bếp</TableHeader>
 
-                {report.headers.map((header) => (
+                {headers.map((header) => (
                   <TableHeader key={header.id} align="center">
                     {header.name}
                   </TableHeader>
@@ -304,7 +333,7 @@ function DailyReport({ report }) {
                     <KitchenBadge kitchen={kitchen.kitchen} />
                   </td>
 
-                  {report.headers.map((header) => (
+                  {headers.map((header) => (
                     <td key={header.id} className="px-4 py-4 text-center">
                       <CountBadge value={kitchen.items[header.name] || 0} />
                     </td>
@@ -312,7 +341,7 @@ function DailyReport({ report }) {
 
                   <td className="px-4 py-4 text-center">
                     <span className="rounded-lg bg-blue-100 px-3 py-2 font-bold text-blue-700">
-                      {kitchen.total}
+                      {kitchen.periodTotals?.[period] ?? kitchen.total}
                     </span>
                   </td>
                 </tr>
@@ -335,16 +364,16 @@ function DailyReport({ report }) {
                   Bếp {kitchen.kitchen}
                 </h3>
 
-                <p className="mt-1 text-xs text-slate-500">Tổng số suất ăn</p>
+                <p className="mt-1 text-xs text-slate-500">{periodLabel}</p>
               </div>
 
               <span className="shrink-0 rounded-full bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700">
-                {kitchen.total} suất
+                {kitchen.periodTotals?.[period] ?? kitchen.total} suất
               </span>
             </div>
 
             <div className="grid grid-cols-2 gap-3 p-4 sm:p-5">
-              {report.headers.map((header) => (
+              {headers.map((header) => (
                 <FoodCard
                   key={header.id}
                   name={header.name}
@@ -362,7 +391,7 @@ function DailyReport({ report }) {
           icon={<BarChart3 size={20} className="text-blue-600" />}
           title="Danh sách nhân viên"
           description="Chi tiết suất ăn của từng nhân viên"
-          badge={`${report.rows.length} nhân viên`}
+          badge={`${rows.length} nhân viên`}
           badgeClass="bg-blue-50 text-blue-700"
         />
 
@@ -374,7 +403,7 @@ function DailyReport({ report }) {
                 <TableHeader>Email</TableHeader>
                 <TableHeader align="center">Bếp</TableHeader>
 
-                {report.headers.map((header) => (
+                {headers.map((header) => (
                   <TableHeader key={header.id} align="center">
                     {header.name}
                   </TableHeader>
@@ -383,7 +412,7 @@ function DailyReport({ report }) {
             </thead>
 
             <tbody>
-              {report.rows.map((row, index) => (
+              {rows.map((row, index) => (
                 <tr
                   key={index}
                   className="border-b border-slate-100 transition hover:bg-slate-50"
@@ -398,7 +427,7 @@ function DailyReport({ report }) {
                     <KitchenBadge kitchen={row.kitchen} />
                   </td>
 
-                  {report.headers.map((header) => (
+                  {headers.map((header) => (
                     <td key={header.id} className="px-4 py-3 text-center">
                       <CountBadge value={row.items[header.name] || 0} />
                     </td>
@@ -412,10 +441,10 @@ function DailyReport({ report }) {
 
       {/* Danh sách nhân viên - Mobile */}
       <section className="space-y-4 lg:hidden">
-        {report.rows.length === 0 ? (
+        {rows.length === 0 ? (
           <EmptyState text="Chưa có dữ liệu nhân viên." />
         ) : (
-          report.rows.map((row, index) => (
+          rows.map((row, index) => (
             <div
               key={index}
               className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
@@ -435,7 +464,7 @@ function DailyReport({ report }) {
               </div>
 
               <div className="grid grid-cols-2 gap-3 p-4 sm:p-5">
-                {report.headers.map((header) => (
+                {headers.map((header) => (
                   <FoodCard
                     key={header.id}
                     name={header.name}
@@ -447,11 +476,29 @@ function DailyReport({ report }) {
           ))
         )}
       </section>
-    </div>
+      </div>
+    </section>
   );
 }
 
 function LeftoverReport({ leftover }) {
+  return (
+    <div className="space-y-10">
+      {["lunch", "dinner"].map((period) => (
+        <LeftoverPeriodReport key={period} leftover={leftover} period={period} />
+      ))}
+    </div>
+  );
+}
+
+function LeftoverPeriodReport({ leftover, period }) {
+  const periodLabel = period === "lunch" ? "Buổi trưa" : "Buổi chiều";
+  const periodLeftovers = leftover.leftovers.filter(
+    (item) => (item.mealPeriod || "lunch") === period,
+  );
+  const users = leftover.users.filter(
+    (user) => user.foodsByPeriod?.[period]?.length > 0,
+  );
   const getType = (type) =>
     ({
       main: "Món cơm",
@@ -460,9 +507,11 @@ function LeftoverReport({ leftover }) {
     })[type] || type;
 
   return (
-    <div className="space-y-8">
+    <section className="space-y-6 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
+      <h2 className="text-xl font-bold text-slate-900">{periodLabel}</h2>
+      <div className="space-y-8">
       <section>
-        <h2 className="mb-4 px-1 text-lg font-bold">Thống kê món thừa</h2>
+        <h2 className="mb-4 px-1 text-lg font-bold">Thống kê món chưa nhận · {periodLabel}</h2>
 
         <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:block">
           <div className="overflow-x-auto">
@@ -476,7 +525,13 @@ function LeftoverReport({ leftover }) {
               </thead>
 
               <tbody>
-                {leftover.leftovers.map((item) => (
+                {periodLeftovers.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="py-8 text-center text-gray-400">
+                      Không có món chưa nhận cho {periodLabel.toLowerCase()}.
+                    </td>
+                  </tr>
+                ) : periodLeftovers.map((item) => (
                   <tr key={item.name} className="border-b">
                     <td className="px-4 py-3">{item.name}</td>
                     <td className="px-4 py-3 text-center">
@@ -493,7 +548,9 @@ function LeftoverReport({ leftover }) {
         </div>
 
         <div className="space-y-3 lg:hidden">
-          {leftover.leftovers.map((item) => (
+          {periodLeftovers.length === 0 ? (
+            <EmptyState text={`Không có món chưa nhận cho ${periodLabel.toLowerCase()}.`} />
+          ) : periodLeftovers.map((item) => (
             <div
               key={item.name}
               className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -514,7 +571,7 @@ function LeftoverReport({ leftover }) {
       </section>
 
       <section>
-        <h2 className="mb-4 px-1 text-lg font-bold">Thống kê theo bếp</h2>
+        <h2 className="mb-4 px-1 text-lg font-bold">Thống kê theo bếp · {periodLabel}</h2>
 
         <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:block">
           <div className="overflow-x-auto">
@@ -523,7 +580,7 @@ function LeftoverReport({ leftover }) {
                 <tr>
                   <TableHeader align="center">Bếp</TableHeader>
 
-                  {leftover.leftovers.map((item) => (
+                  {periodLeftovers.map((item) => (
                     <TableHeader key={item.name} align="center">
                       {item.name}
                     </TableHeader>
@@ -539,7 +596,7 @@ function LeftoverReport({ leftover }) {
                       {kitchen.kitchen}
                     </td>
 
-                    {leftover.leftovers.map((item) => (
+                    {periodLeftovers.map((item) => (
                       <td key={item.name} className="px-4 py-3 text-center">
                         {kitchen.items[item.name] || 0}
                       </td>
@@ -547,7 +604,7 @@ function LeftoverReport({ leftover }) {
 
                     <td className="px-4 py-3 text-center">
                       <span className="rounded-lg bg-blue-100 px-3 py-2 font-bold text-blue-700">
-                        {kitchen.total}
+                        {kitchen.periodTotals?.[period] ?? kitchen.total}
                       </span>
                     </td>
                   </tr>
@@ -568,12 +625,12 @@ function LeftoverReport({ leftover }) {
               </h3>
               <div className="mb-4">
                 <span className="rounded-full bg-blue-100 px-4 py-2 text-sm font-bold text-blue-700">
-                  Tổng: {kitchen.total} suất
+                  Tổng: {kitchen.periodTotals?.[period] ?? kitchen.total} suất
                 </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                {leftover.leftovers.map((item) => (
+                {periodLeftovers.map((item) => (
                   <FoodCard
                     key={item.name}
                     name={item.name}
@@ -588,7 +645,7 @@ function LeftoverReport({ leftover }) {
 
       <section>
         <h2 className="mb-4 px-1 text-lg font-bold">
-          Danh sách nhân viên chưa nhận
+          Danh sách nhân viên chưa nhận · {periodLabel}
         </h2>
 
         <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm lg:block">
@@ -604,14 +661,14 @@ function LeftoverReport({ leftover }) {
               </thead>
 
               <tbody>
-                {leftover.users.length === 0 ? (
+                {users.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-8 text-center text-gray-400">
                       Không có nhân viên chưa nhận.
                     </td>
                   </tr>
                 ) : (
-                  leftover.users.map((user, index) => (
+                  users.map((user, index) => (
                     <tr key={index} className="border-b hover:bg-slate-50">
                       <td className="px-4 py-3 font-semibold">
                         {user.employeeId}
@@ -622,7 +679,7 @@ function LeftoverReport({ leftover }) {
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
-                          {user.foods.map((food, foodIndex) => (
+                          {user.foodsByPeriod[period].map((food, foodIndex) => (
                             <FoodTag key={foodIndex} food={food} />
                           ))}
                         </div>
@@ -636,10 +693,10 @@ function LeftoverReport({ leftover }) {
         </div>
 
         <div className="space-y-4 lg:hidden">
-          {leftover.users.length === 0 ? (
+          {users.length === 0 ? (
             <EmptyState text="Không có nhân viên chưa nhận." />
           ) : (
-            leftover.users.map((user, index) => (
+            users.map((user, index) => (
               <div
                 key={index}
                 className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
@@ -661,7 +718,7 @@ function LeftoverReport({ leftover }) {
                   <p className="mb-2 text-sm text-slate-500">Đã đặt món</p>
 
                   <div className="flex flex-wrap gap-2">
-                    {user.foods.map((food, foodIndex) => (
+                    {user.foodsByPeriod[period].map((food, foodIndex) => (
                       <FoodTag key={foodIndex} food={food} />
                     ))}
                   </div>
@@ -671,7 +728,8 @@ function LeftoverReport({ leftover }) {
           )}
         </div>
       </section>
-    </div>
+      </div>
+    </section>
   );
 }
 

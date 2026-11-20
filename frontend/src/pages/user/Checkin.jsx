@@ -138,6 +138,13 @@ function Checkin() {
               {new Date(checkinData.receivedAt).toLocaleString()}
             </div>
 
+            <div className="mb-4">
+              <span className="font-semibold">{t("meal_period")}:</span>{" "}
+              {checkinData.mealPeriod === "lunch"
+                ? t("meal_lunch")
+                : t("meal_dinner")}
+            </div>
+
             <div className="font-semibold mb-2">{t("meal_list")}</div>
 
             <ul className="space-y-2">

@@ -189,6 +189,10 @@ const orderDaySchema = new mongoose.Schema({
     type: Boolean,
     default: false
 },
+receivedLunch: { type: Boolean, default: false },
+receivedLunchAt: { type: Date, default: null },
+receivedDinner: { type: Boolean, default: false },
+receivedDinnerAt: { type: Date, default: null },
 
 review: {
 

@@ -5,6 +5,13 @@ const Order = require("../models/Order");
 const User = require("../models/User");
 
 const CheckinToken = require("../models/CheckinToken");
+const {
+  getMealPeriodAt,
+  getMealsForPeriod,
+  getReceivedPeriods,
+  isPeriodReceived,
+  markPeriodReceived,
+} = require("../utils/mealCheckin");
 
 exports.getTodayQr = async (req, res) => {
   try {
@@ -69,36 +76,38 @@ exports.getTodayCheckins = async (req, res) => {
             $gte: startOfDay.toDate(),
             $lt: endOfDay.toDate(),
           },
-          received: true,
+          $or: [
+            { received: true },
+            { receivedLunch: true },
+            { receivedDinner: true },
+          ],
         },
       },
     }).populate("user", "name email kitchen employeeId");
 
     const checkins = orders
-      .map((order) => {
-        const day = order.days.find(
-          (item) =>
-            item.received &&
-            moment(item.date).tz("Asia/Ho_Chi_Minh").isSame(startOfDay, "day"),
+      .flatMap((order) => {
+        const day = order.days.find((item) =>
+          moment(item.date).tz("Asia/Ho_Chi_Minh").isSame(startOfDay, "day"),
         );
 
-        if (!day || !order.user) return null;
+        if (!day || !order.user) return [];
 
-        return {
+        return getReceivedPeriods(day).map((period) => ({
           orderId: order._id,
+          mealPeriod: period,
           employee: {
             name: order.user.name,
             email: order.user.email,
             kitchen: order.user.kitchen,
             employeeId: order.user.employeeId,
           },
-          receivedAt: day.receivedAt,
-          mains: day.mains,
-          drink: day.drink,
-          soup: day.soup,
-        };
+          receivedAt:
+            (period === "lunch" ? day.receivedLunchAt : day.receivedDinnerAt) ||
+            day.receivedAt,
+          ...getMealsForPeriod(day, period),
+        }));
       })
-      .filter(Boolean)
       .sort((a, b) => new Date(b.receivedAt) - new Date(a.receivedAt));
 
     return res.json({
@@ -142,6 +151,15 @@ exports.checkIn = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "QR không hợp lệ",
+      });
+    }
+
+    const mealPeriod = getMealPeriodAt();
+
+    if (!mealPeriod) {
+      return res.status(400).json({
+        success: false,
+        message: "Chỉ có thể nhận suất ăn trong khung giờ 06:00–21:00.",
       });
     }
 
@@ -207,25 +225,32 @@ exports.checkIn = async (req, res) => {
       });
     }
 
-    const hasMeal = day.mains.length > 0 || day.drink || day.soup;
+    const mealData = getMealsForPeriod(day, mealPeriod);
+    const hasMeal =
+      mealData.mains.length > 0 || mealData.drink || mealData.soup;
 
     if (!hasMeal) {
       return res.status(400).json({
         success: false,
-        message: "Bạn không đăng ký suất ăn hôm nay.",
+        message:
+          mealPeriod === "lunch"
+            ? "Bạn không đăng ký suất ăn buổi trưa hôm nay."
+            : "Bạn không đăng ký suất ăn buổi chiều hôm nay.",
       });
     }
 
-    if (day.received) {
+    if (isPeriodReceived(day, mealPeriod)) {
       return res.status(409).json({
         success: false,
-        message: "Bạn đã nhận suất ăn.",
+        message:
+          mealPeriod === "lunch"
+            ? "Bạn đã nhận suất ăn buổi trưa."
+            : "Bạn đã nhận suất ăn buổi chiều.",
       });
     }
 
-    day.received = true;
-
-    day.receivedAt = new Date();
+    const receivedAt = new Date();
+    markPeriodReceived(day, mealPeriod, receivedAt);
 
     await order.save();
     const io = req.app.get("io");
@@ -242,13 +267,10 @@ exports.checkIn = async (req, res) => {
         employeeId: order.user.employeeId,
       },
 
-      receivedAt: day.receivedAt,
+      receivedAt,
+      mealPeriod,
 
-      mains: day.mains,
-
-      drink: day.drink,
-
-      soup: day.soup,
+      ...mealData,
     });
 
     return res.json({
@@ -256,10 +278,9 @@ exports.checkIn = async (req, res) => {
       message: "Check-in thành công.",
       data: {
         date: day.date,
-        receivedAt: day.receivedAt,
-        mains: day.mains,
-        drink: day.drink,
-        soup: day.soup,
+        receivedAt,
+        mealPeriod,
+        ...mealData,
       },
     });
   } catch (err) {

@@ -32,7 +32,10 @@ function WeekMenuContent({
     return order.mains.length > 0 || !!order.drink || !!order.soup;
   };
 
-  const isDayClosed = Boolean(menu?.days?.[currentDay]?.orderingClosed);
+  // Tạm bỏ validate ngày khóa để test đặt món cho tuần hiện tại.
+  // Khôi phục sau khi test xong:
+  // const isDayClosed = Boolean(menu?.days?.[currentDay]?.orderingClosed);
+  const isDayClosed = false;
 
   // =========================
   // Init Order
