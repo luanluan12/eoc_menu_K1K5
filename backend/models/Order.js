@@ -170,6 +170,11 @@ const orderDaySchema = new mongoose.Schema({
 
     },
 
+    selections: {
+        lunch: { type: String, enum: ["rice", "vegetarian", "noodles", "soup", ""], default: "" },
+        dinner: { type: String, enum: ["rice", "vegetarian", "noodles", "soup", ""], default: "" },
+    },
+
     drink: {
 
         type: singleSelectionSchema,

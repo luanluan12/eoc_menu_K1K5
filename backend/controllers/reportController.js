@@ -61,60 +61,156 @@ function getFoodName(day) {
 
   (day.mains || []).forEach((item) => {
     if (item.quantity > 0) {
-      const meal = item.mealPeriod === "lunch" ? "Trưa" : item.mealPeriod === "dinner" ? "Chiều" : "";
-      foods.push(`${meal ? `[${meal}] ` : ""}${item.name} x${item.quantity}`);
+      const meal = item.mealPeriod === "dinner" ? "Chiều" : "Trưa";
+      foods.push(`[${meal}] ${item.name} x${item.quantity}`);
     }
   });
 
   if (day.drink?.name) {
-    foods.push(day.drink.name);
+    foods.push(`[Trưa] ${day.drink.name}`);
   }
 
   if (day.soup?.name) {
-    foods.push(day.soup.name);
+    foods.push(`[Trưa] ${day.soup.name}`);
   }
 
   return foods.join(", ");
 }
 
-function getMenuMainDishes(day) {
-  const legacy = (day?.mains || []).map((dish) => ({
-    ...dish.toObject?.() || dish,
-    mealPeriod: dish.mealPeriod === "dinner" ? "dinner" : "lunch",
-  }));
+function getMenuReportHeaders(day) {
   const flexible = [];
   for (const period of ["lunch", "dinner"]) {
     for (const category of ["rice", "vegetarian", "noodles", "soup"]) {
-      const periodLabel = period === "lunch" ? "Trưa" : "Chiều";
-      const categoryLabels = { rice: "Món cơm", vegetarian: "Món chay", noodles: "Món nước", soup: "Món soup" };
       for (const dish of day?.meals?.[period]?.[category] || []) {
         flexible.push({
-          ...dish.toObject?.() || dish,
+          type: "main",
+          id: String(dish._id),
+          name: dish.name || "",
           mealPeriod: period,
-          name: `[${periodLabel} · ${categoryLabels[category]}] ${dish.name || ""}`,
+          category,
         });
       }
     }
   }
-  return [...legacy, ...flexible];
+  if (flexible.length > 0) return flexible;
+
+  return [
+    ...(day?.mains || []).map((dish) => ({
+      type: "main",
+      id: String(dish._id),
+      name: dish.name,
+      mealPeriod: dish.mealPeriod === "dinner" ? "dinner" : "lunch",
+      category: dish.vegetarian ? "vegetarian" : "rice",
+    })),
+    ...(day?.drinks || []).map((dish) => ({
+      type: "drink", id: String(dish._id), name: dish.name, mealPeriod: "lunch", category: "noodles",
+    })),
+    ...(day?.soups || []).map((dish) => ({
+      type: "soup", id: String(dish._id), name: dish.name, mealPeriod: "lunch", category: "soup",
+    })),
+  ];
 }
 
-function calculatePeriodTotal(headers, items, period, roundMain = false) {
-  let mainTotal = 0;
-  let drinkTotal = 0;
-  let soupTotal = 0;
+function addReportHeaderKeys(headers) {
+  const counts = headers.reduce((result, header) => {
+    result.set(header.name, (result.get(header.name) || 0) + 1);
+    return result;
+  }, new Map());
 
-  for (const header of headers) {
-    if (header.mealPeriod !== period) continue;
+  const seenLabels = new Map();
+  const categoryLabels = { rice: "Món cơm", vegetarian: "Món chay", noodles: "Món nước", soup: "Món soup" };
 
-    const quantity = items[header.name] || 0;
-    if (header.type === "main") mainTotal += quantity;
-    else if (header.type === "drink") drinkTotal += quantity;
-    else if (header.type === "soup") soupTotal += quantity;
+  headers.forEach((header) => {
+    header.key = `${header.type}:${header.id}`;
+    const periodLabel = header.mealPeriod === "dinner" ? "Chiều" : "Trưa";
+    const baseLabel = header.type === "main" && header.category
+      ? `[${periodLabel} · ${categoryLabels[header.category] || header.category}] ${header.name}`
+      : counts.get(header.name) > 1
+        ? `[${periodLabel}] ${header.name}`
+        : header.name;
+    const occurrence = (seenLabels.get(baseLabel) || 0) + 1;
+    seenLabels.set(baseLabel, occurrence);
+    header.label = occurrence > 1 ? `${baseLabel} (${occurrence})` : baseLabel;
+  });
+}
+
+function getExcelReportHeaderLabel(header) {
+  const label = header.label || header.name;
+  if (/^\[(Trưa|Chiều)/.test(label)) return label;
+  return `[${header.mealPeriod === "dinner" ? "Buổi chiều" : "Buổi trưa"}] ${label}`;
+}
+
+function reconcileReportHeaders(headers, orders, targetDate) {
+  const addSnapshot = (type, item, mealPeriod = "lunch") => {
+    if (!item?.dishId) return;
+    const id = String(item.dishId);
+    const existing = headers.find((header) => header.type === type && header.id === id);
+
+    if (existing) {
+      if (item.name) existing.name = item.name;
+      if (type === "main" && item.mealPeriod) existing.mealPeriod = item.mealPeriod;
+      if (type === "main" && item.category) existing.category = item.category;
+      return;
+    }
+
+    headers.push({
+      type,
+      id,
+      name: item.name || "(Món đã đặt)",
+      mealPeriod: type === "main" && item.mealPeriod === "dinner" ? "dinner" : mealPeriod,
+      category: type === "main" ? item.category || "" : "",
+    });
+  };
+
+  for (const order of orders) {
+    const day = order.days.find((item) =>
+      moment(item.date).tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD") === targetDate,
+    );
+    if (!day) continue;
+
+    for (const main of day.mains || []) addSnapshot("main", main);
+    addSnapshot("drink", day.drink);
+    addSnapshot("soup", day.soup);
   }
 
-  const mainMeals = mainTotal / 2;
-  return (roundMain ? Math.ceil(mainMeals) : mainMeals) + drinkTotal + soupTotal;
+  const unifiedDishIds = new Set(
+    headers.filter((header) => header.type === "main").map((header) => header.id),
+  );
+  for (let index = headers.length - 1; index >= 0; index -= 1) {
+    if (["drink", "soup"].includes(headers[index].type) && unifiedDishIds.has(headers[index].id)) {
+      headers.splice(index, 1);
+    }
+  }
+
+  addReportHeaderKeys(headers);
+}
+
+function hasOrderedMealForPeriod(day, period) {
+  const hasMain = (day.mains || []).some((item) =>
+    item.quantity > 0 && (item.mealPeriod === "dinner" ? "dinner" : "lunch") === period,
+  );
+
+  return hasMain || (period === "lunch" && Boolean(day.drink || day.soup));
+}
+
+function hasUnreceivedMealForPeriod(unreceivedMeals, period) {
+  const hasMain = unreceivedMeals.mains.some((item) =>
+    item.quantity > 0 && (item.mealPeriod === "dinner" ? "dinner" : "lunch") === period,
+  );
+
+  return hasMain || (period === "lunch" && Boolean(unreceivedMeals.drink || unreceivedMeals.soup));
+}
+
+function getSelectedOptionForPeriod(day, period) {
+  const validOptions = ["rice", "vegetarian", "noodles", "soup"];
+  if (validOptions.includes(day.selections?.[period])) return day.selections[period];
+
+  const selectedDish = (day.mains || []).find((item) =>
+    (item.mealPeriod === "dinner" ? "dinner" : "lunch") === period && item.quantity > 0,
+  );
+  if (!selectedDish) return "";
+  if (validOptions.includes(selectedDish.category)) return selectedDish.category;
+  return selectedDish.vegetarian ? "vegetarian" : "rice";
 }
 
 // ======================================================
@@ -169,40 +265,8 @@ exports.exportDailyExcel = async (req, res) => {
     // Danh sách món của đúng ngày
     // ==================================================
 
-    const headers = [];
-
-    getMenuMainDishes(selectedDay).forEach((item) => {
-      headers.push({
-        type: "main",
-
-        id: String(item._id),
-
-        name: item.name,
-        mealPeriod: item.mealPeriod || "lunch",
-      });
-    });
-
-    (selectedDay.drinks || []).forEach((item) => {
-      headers.push({
-        type: "drink",
-
-        id: String(item._id),
-
-        name: item.name,
-        mealPeriod: "lunch",
-      });
-    });
-
-    (selectedDay.soups || []).forEach((item) => {
-      headers.push({
-        type: "soup",
-
-        id: String(item._id),
-
-        name: item.name,
-        mealPeriod: "lunch",
-      });
-    });
+    const headers = getMenuReportHeaders(selectedDay);
+    addReportHeaderKeys(headers);
 
     // ==================================================
     // Lấy Order
@@ -223,6 +287,8 @@ exports.exportDailyExcel = async (req, res) => {
       .sort({
         "user.employeeId": 1,
       });
+
+    reconcileReportHeaders(headers, orders, targetDate);
 
     // ==================================================
     // Workbook
@@ -247,7 +313,7 @@ exports.exportDailyExcel = async (req, res) => {
     const kitchenSummary = {};
 
     headers.forEach((item) => {
-      totalSummary[item.name] = 0;
+      totalSummary[item.key] = 0;
     });
 
     // current row
@@ -296,7 +362,7 @@ exports.exportDailyExcel = async (req, res) => {
     let column = 4;
 
     headers.forEach((item) => {
-      sheet.getCell(rowIndex, column).value = item.name;
+      sheet.getCell(rowIndex, column).value = getExcelReportHeaderLabel(item);
 
       column++;
     });
@@ -381,6 +447,9 @@ exports.exportDailyExcel = async (req, res) => {
       );
 
       if (!day) continue;
+      const hasFood =
+        (day.mains || []).some((item) => item.quantity > 0) || day.drink || day.soup;
+      if (!hasFood) continue;
 
       sheet.getCell(rowIndex, 1).value = order.user.employeeId;
 
@@ -394,7 +463,7 @@ exports.exportDailyExcel = async (req, res) => {
         kitchenSummary[kitchen] = {};
 
         headers.forEach((item) => {
-          kitchenSummary[kitchen][item.name] = 0;
+          kitchenSummary[kitchen][item.key] = 0;
         });
       }
 
@@ -413,9 +482,9 @@ exports.exportDailyExcel = async (req, res) => {
           if (found) {
             value = found.quantity;
 
-            totalSummary[item.name] += found.quantity;
+            totalSummary[item.key] += found.quantity;
 
-            kitchenSummary[kitchen][item.name] += found.quantity;
+            kitchenSummary[kitchen][item.key] += found.quantity;
           }
         }
 
@@ -426,9 +495,9 @@ exports.exportDailyExcel = async (req, res) => {
           if (day.drink && String(day.drink.dishId) === item.id) {
             value = 1;
 
-            totalSummary[item.name]++;
+            totalSummary[item.key]++;
 
-            kitchenSummary[kitchen][item.name]++;
+            kitchenSummary[kitchen][item.key]++;
           }
         }
 
@@ -439,9 +508,9 @@ exports.exportDailyExcel = async (req, res) => {
           if (day.soup && String(day.soup.dishId) === item.id) {
             value = 1;
 
-            totalSummary[item.name]++;
+            totalSummary[item.key]++;
 
-            kitchenSummary[kitchen][item.name]++;
+            kitchenSummary[kitchen][item.key]++;
           }
         }
 
@@ -502,7 +571,7 @@ exports.exportDailyExcel = async (req, res) => {
     let col = 4;
 
     headers.forEach((item) => {
-      sheet.getCell(rowIndex, col).value = totalSummary[item.name];
+      sheet.getCell(rowIndex, col).value = totalSummary[item.key];
 
       sheet.getCell(rowIndex, col).font = {
         bold: true,
@@ -539,7 +608,7 @@ exports.exportDailyExcel = async (req, res) => {
         col = 4;
 
         headers.forEach((item) => {
-          sheet.getCell(rowIndex, col).value = kitchenSummary[kitchen][item.name];
+          sheet.getCell(rowIndex, col).value = kitchenSummary[kitchen][item.key];
 
           col++;
         });
@@ -630,40 +699,8 @@ exports.getDailyReport = async (req, res) => {
     // Header
     // =====================================
 
-    const headers = [];
-
-    getMenuMainDishes(selectedDay).forEach((item) => {
-      headers.push({
-        type: "main",
-
-        id: String(item._id),
-
-        name: item.name,
-        mealPeriod: item.mealPeriod || "lunch",
-      });
-    });
-
-    (selectedDay.drinks || []).forEach((item) => {
-      headers.push({
-        type: "drink",
-
-        id: String(item._id),
-
-        name: item.name,
-        mealPeriod: "lunch",
-      });
-    });
-
-    (selectedDay.soups || []).forEach((item) => {
-      headers.push({
-        type: "soup",
-
-        id: String(item._id),
-
-        name: item.name,
-        mealPeriod: "lunch",
-      });
-    });
+    const headers = getMenuReportHeaders(selectedDay);
+    addReportHeaderKeys(headers);
 
     // =====================================
     // Orders
@@ -679,12 +716,20 @@ exports.getDailyReport = async (req, res) => {
       path: "user",
       select: "employeeId name email kitchen",
     });
+    reconcileReportHeaders(headers, orders, targetDate);
     const totals = {};
 
     const kitchens = {};
+    const kitchenMealCounts = {};
+    const optionCategories = ["rice", "vegetarian", "noodles", "soup"];
+    const optionTotals = {
+      lunch: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+      dinner: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+    };
+    const kitchenOptionTotals = {};
 
     headers.forEach((h) => {
-      totals[h.name] = 0;
+      totals[h.key] = 0;
     });
 
     const rows = [];
@@ -702,7 +747,7 @@ exports.getDailyReport = async (req, res) => {
 
       if (!day) continue;
       const hasFood =
-        day.mains.some((item) => item.quantity > 0) || day.drink || day.soup;
+        (day.mains || []).some((item) => item.quantity > 0) || day.drink || day.soup;
 
       if (!hasFood) continue;
 
@@ -710,16 +755,32 @@ exports.getDailyReport = async (req, res) => {
 
       if (!kitchens[kitchen]) {
         kitchens[kitchen] = {};
+        kitchenMealCounts[kitchen] = { lunch: 0, dinner: 0 };
+        kitchenOptionTotals[kitchen] = {
+          lunch: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+          dinner: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+        };
 
         headers.forEach((h) => {
-          kitchens[kitchen][h.name] = 0;
+          kitchens[kitchen][h.key] = 0;
         });
+      }
+
+      for (const period of ["lunch", "dinner"]) {
+        if (hasOrderedMealForPeriod(day, period)) {
+          kitchenMealCounts[kitchen][period] += 1;
+          const category = getSelectedOptionForPeriod(day, period);
+          if (category) {
+            optionTotals[period][category] += 1;
+            kitchenOptionTotals[kitchen][period][category] += 1;
+          }
+        }
       }
 
       const items = {};
 
       headers.forEach((h) => {
-        items[h.name] = "";
+        items[h.key] = "";
       });
 
       // Main
@@ -730,11 +791,11 @@ exports.getDailyReport = async (req, res) => {
         );
 
         if (head) {
-          items[head.name] = main.quantity;
+          items[head.key] = main.quantity;
 
-          totals[head.name] += main.quantity;
+          totals[head.key] += main.quantity;
 
-          kitchens[kitchen][head.name] += main.quantity;
+          kitchens[kitchen][head.key] += main.quantity;
         }
       });
 
@@ -746,11 +807,11 @@ exports.getDailyReport = async (req, res) => {
         );
 
         if (head) {
-          items[head.name] = 1;
+          items[head.key] = 1;
 
-          totals[head.name]++;
+          totals[head.key]++;
 
-          kitchens[kitchen][head.name]++;
+          kitchens[kitchen][head.key]++;
         }
       }
 
@@ -762,11 +823,11 @@ exports.getDailyReport = async (req, res) => {
         );
 
         if (head) {
-          items[head.name] = 1;
+          items[head.key] = 1;
 
-          totals[head.name]++;
+          totals[head.key]++;
 
-          kitchens[kitchen][head.name]++;
+          kitchens[kitchen][head.key]++;
         }
       }
 
@@ -781,6 +842,11 @@ exports.getDailyReport = async (req, res) => {
 
         received: day.received,
 
+        selections: {
+          lunch: getSelectedOptionForPeriod(day, "lunch"),
+          dinner: getSelectedOptionForPeriod(day, "dinner"),
+        },
+
         items,
       });
     }
@@ -790,30 +856,14 @@ exports.getDailyReport = async (req, res) => {
       .map((kitchen) => {
         const items = kitchens[kitchen];
 
-        let mainTotal = 0;
-        let drinkTotal = 0;
-        let soupTotal = 0;
-
-        headers.forEach((header) => {
-          const qty = items[header.name] || 0;
-
-          if (header.type === "main") {
-            mainTotal += qty;
-          } else if (header.type === "drink") {
-            drinkTotal += qty;
-          } else if (header.type === "soup") {
-            soupTotal += qty;
-          }
-        });
-
         return {
           kitchen,
           items,
-          total: mainTotal / 2 + drinkTotal + soupTotal,
+          total: kitchenMealCounts[kitchen].lunch + kitchenMealCounts[kitchen].dinner,
           periodTotals: {
-            lunch: calculatePeriodTotal(headers, items, "lunch"),
-            dinner: calculatePeriodTotal(headers, items, "dinner"),
+            ...kitchenMealCounts[kitchen],
           },
+          optionTotals: kitchenOptionTotals[kitchen],
         };
       });
 
@@ -828,6 +878,8 @@ exports.getDailyReport = async (req, res) => {
         rows,
 
         totals,
+
+        optionTotals,
 
         kitchens: kitchenRows,
       },
@@ -886,34 +938,8 @@ exports.getLeftoverReport = async (req, res) => {
     // Header
     // =====================================
 
-    const headers = [];
-
-    getMenuMainDishes(selectedDay).forEach((item) => {
-      headers.push({
-        type: "main",
-        id: String(item._id),
-        name: item.name,
-        mealPeriod: item.mealPeriod || "lunch",
-      });
-    });
-
-    (selectedDay.drinks || []).forEach((item) => {
-      headers.push({
-        type: "drink",
-        id: String(item._id),
-        name: item.name,
-        mealPeriod: "lunch",
-      });
-    });
-
-    (selectedDay.soups || []).forEach((item) => {
-      headers.push({
-        type: "soup",
-        id: String(item._id),
-        name: item.name,
-        mealPeriod: "lunch",
-      });
-    });
+    const headers = getMenuReportHeaders(selectedDay);
+    addReportHeaderKeys(headers);
 
     // =====================================
     // Orders
@@ -930,6 +956,7 @@ exports.getLeftoverReport = async (req, res) => {
       path: "user",
       select: "employeeId name email kitchen",
     });
+    reconcileReportHeaders(headers, orders, targetDate);
 
     // =====================================
     // Init
@@ -937,12 +964,15 @@ exports.getLeftoverReport = async (req, res) => {
 
     const leftovers = {};
     const kitchens = {};
+    const kitchenMealCounts = {};
     const users = [];
 
     headers.forEach((h) => {
-      leftovers[h.name] = {
-        name: h.name,
+      leftovers[h.key] = {
+        key: h.key,
+        name: h.label,
         type: h.type,
+        category: h.category || "",
         mealPeriod: h.mealPeriod || "lunch",
         quantity: 0,
         users: [],
@@ -1010,10 +1040,17 @@ exports.getLeftoverReport = async (req, res) => {
 
       if (!kitchens[kitchen]) {
         kitchens[kitchen] = {};
+        kitchenMealCounts[kitchen] = { lunch: 0, dinner: 0 };
 
         headers.forEach((h) => {
-          kitchens[kitchen][h.name] = 0;
+          kitchens[kitchen][h.key] = 0;
         });
+      }
+
+      for (const period of ["lunch", "dinner"]) {
+        if (hasUnreceivedMealForPeriod(unreceivedMeals, period)) {
+          kitchenMealCounts[kitchen][period] += 1;
+        }
       }
 
       // ==========================
@@ -1027,9 +1064,9 @@ exports.getLeftoverReport = async (req, res) => {
 
         if (!head) return;
 
-        leftovers[head.name].quantity += main.quantity;
+        leftovers[head.key].quantity += main.quantity;
 
-        leftovers[head.name].users.push({
+        leftovers[head.key].users.push({
           employeeId: order.user.employeeId,
           name: order.user.name,
           email: order.user.email,
@@ -1037,7 +1074,7 @@ exports.getLeftoverReport = async (req, res) => {
           quantity: main.quantity,
         });
 
-        kitchens[kitchen][head.name] += main.quantity;
+        kitchens[kitchen][head.key] += main.quantity;
       });
 
       // ==========================
@@ -1050,16 +1087,16 @@ exports.getLeftoverReport = async (req, res) => {
         );
 
         if (head) {
-          leftovers[head.name].quantity++;
+          leftovers[head.key].quantity++;
 
-          leftovers[head.name].users.push({
+          leftovers[head.key].users.push({
             employeeId: order.user.employeeId,
             name: order.user.name,
             email: order.user.email,
             kitchen: order.user.kitchen,
           });
 
-          kitchens[kitchen][head.name]++;
+          kitchens[kitchen][head.key]++;
         }
       }
 
@@ -1073,16 +1110,16 @@ exports.getLeftoverReport = async (req, res) => {
         );
 
         if (head) {
-          leftovers[head.name].quantity++;
+          leftovers[head.key].quantity++;
 
-          leftovers[head.name].users.push({
+          leftovers[head.key].users.push({
             employeeId: order.user.employeeId,
             name: order.user.name,
             email: order.user.email,
             kitchen: order.user.kitchen,
           });
 
-          kitchens[kitchen][head.name]++;
+          kitchens[kitchen][head.key]++;
         }
       }
     }
@@ -1094,38 +1131,12 @@ exports.getLeftoverReport = async (req, res) => {
     const kitchenRows = Object.keys(kitchens)
       .sort(sortKitchenValues)
       .map((kitchen) => {
-        let mainTotal = 0;
-        let drinkTotal = 0;
-        let soupTotal = 0;
-
-        headers.forEach((header) => {
-          const value = kitchens[kitchen][header.name] || 0;
-
-          switch (header.type) {
-            case "main":
-              mainTotal += value;
-              break;
-
-            case "drink":
-              drinkTotal += value;
-              break;
-
-            case "soup":
-              soupTotal += value;
-              break;
-
-            default:
-              break;
-          }
-        });
-
         return {
           kitchen,
           items: kitchens[kitchen],
-          total: Math.ceil(mainTotal / 2) + drinkTotal + soupTotal,
+          total: kitchenMealCounts[kitchen].lunch + kitchenMealCounts[kitchen].dinner,
           periodTotals: {
-            lunch: calculatePeriodTotal(headers, kitchens[kitchen], "lunch", true),
-            dinner: calculatePeriodTotal(headers, kitchens[kitchen], "dinner", true),
+            ...kitchenMealCounts[kitchen],
           },
         };
       });
@@ -1783,31 +1794,8 @@ exports.exportLeftoverExcel = async (req, res) => {
     // Header
     // =====================================
 
-    const headers = [];
-
-    getMenuMainDishes(selectedDay).forEach((item) => {
-      headers.push({
-        type: "main",
-        id: String(item._id),
-        name: item.name,
-      });
-    });
-
-    (selectedDay.drinks || []).forEach((item) => {
-      headers.push({
-        type: "drink",
-        id: String(item._id),
-        name: item.name,
-      });
-    });
-
-    (selectedDay.soups || []).forEach((item) => {
-      headers.push({
-        type: "soup",
-        id: String(item._id),
-        name: item.name,
-      });
-    });
+    const headers = getMenuReportHeaders(selectedDay);
+    addReportHeaderKeys(headers);
 
     // =====================================
     // Orders
@@ -1824,6 +1812,7 @@ exports.exportLeftoverExcel = async (req, res) => {
       path: "user",
       select: "employeeId name email kitchen",
     });
+    reconcileReportHeaders(headers, orders, targetDate);
 
     // =====================================
     // Statistics
@@ -1831,12 +1820,15 @@ exports.exportLeftoverExcel = async (req, res) => {
 
     const leftovers = {};
     const kitchens = {};
+    const kitchenMealCounts = {};
     const users = [];
 
     headers.forEach((h) => {
-      leftovers[h.name] = {
-        name: h.name,
+      leftovers[h.key] = {
+        key: h.key,
+        name: h.label,
         type: h.type,
+        category: h.category || "",
         quantity: 0,
         users: [],
       };
@@ -1889,10 +1881,17 @@ exports.exportLeftoverExcel = async (req, res) => {
 
       if (!kitchens[kitchen]) {
         kitchens[kitchen] = {};
+        kitchenMealCounts[kitchen] = { lunch: 0, dinner: 0 };
 
         headers.forEach((h) => {
-          kitchens[kitchen][h.name] = 0;
+          kitchens[kitchen][h.key] = 0;
         });
+      }
+
+      for (const period of ["lunch", "dinner"]) {
+        if (hasUnreceivedMealForPeriod(unreceivedMeals, period)) {
+          kitchenMealCounts[kitchen][period] += 1;
+        }
       }
 
       // MAIN
@@ -1904,9 +1903,9 @@ exports.exportLeftoverExcel = async (req, res) => {
 
         if (!head) return;
 
-        leftovers[head.name].quantity += main.quantity;
+        leftovers[head.key].quantity += main.quantity;
 
-        leftovers[head.name].users.push({
+        leftovers[head.key].users.push({
           employeeId: order.user.employeeId,
           name: order.user.name,
           email: order.user.email,
@@ -1914,7 +1913,7 @@ exports.exportLeftoverExcel = async (req, res) => {
           quantity: main.quantity,
         });
 
-        kitchens[kitchen][head.name] += main.quantity;
+        kitchens[kitchen][head.key] += main.quantity;
       });
 
       // DRINK
@@ -1925,9 +1924,9 @@ exports.exportLeftoverExcel = async (req, res) => {
         );
 
         if (head) {
-          leftovers[head.name].quantity++;
+          leftovers[head.key].quantity++;
 
-          leftovers[head.name].users.push({
+          leftovers[head.key].users.push({
             employeeId: order.user.employeeId,
             name: order.user.name,
             email: order.user.email,
@@ -1935,7 +1934,7 @@ exports.exportLeftoverExcel = async (req, res) => {
             quantity: 1,
           });
 
-          kitchens[kitchen][head.name]++;
+          kitchens[kitchen][head.key]++;
         }
       }
 
@@ -1947,9 +1946,9 @@ exports.exportLeftoverExcel = async (req, res) => {
         );
 
         if (head) {
-          leftovers[head.name].quantity++;
+          leftovers[head.key].quantity++;
 
-          leftovers[head.name].users.push({
+          leftovers[head.key].users.push({
             employeeId: order.user.employeeId,
             name: order.user.name,
             email: order.user.email,
@@ -1957,7 +1956,7 @@ exports.exportLeftoverExcel = async (req, res) => {
             quantity: 1,
           });
 
-          kitchens[kitchen][head.name]++;
+          kitchens[kitchen][head.key]++;
         }
       }
     }
@@ -2038,8 +2037,8 @@ exports.exportLeftoverExcel = async (req, res) => {
 
     headers.forEach((h) => {
       kitchenColumns.push({
-        header: h.name,
-        key: h.name,
+        header: getExcelReportHeaderLabel(h),
+        key: h.key,
         width: 18,
       });
     });
@@ -2065,34 +2064,13 @@ exports.exportLeftoverExcel = async (req, res) => {
           kitchen,
         };
 
-        let mainTotal = 0;
-        let drinkTotal = 0;
-        let soupTotal = 0;
-
         headers.forEach((h) => {
-          const value = kitchens[kitchen][h.name] || 0;
+          const value = kitchens[kitchen][h.key] || 0;
 
-          row[h.name] = value;
-
-          switch (h.type) {
-            case "main":
-              mainTotal += value;
-              break;
-
-            case "drink":
-              drinkTotal += value;
-              break;
-
-            case "soup":
-              soupTotal += value;
-              break;
-
-            default:
-              break;
-          }
+          row[h.key] = value;
         });
 
-        row.total = Math.ceil(mainTotal / 2) + drinkTotal + soupTotal;
+        row.total = kitchenMealCounts[kitchen].lunch + kitchenMealCounts[kitchen].dinner;
 
         kitchenSheet.addRow(row);
       });

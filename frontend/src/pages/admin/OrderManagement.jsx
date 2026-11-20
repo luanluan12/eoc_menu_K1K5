@@ -80,11 +80,6 @@ function OrderManagement() {
     }
   };
 
-  const receivedCount = orders.filter(
-    (order) => order.selectedDay?.received,
-  ).length;
-
-  const notReceivedCount = orders.length - receivedCount;
   const filteredOrders = orders.filter((order) => {
     const key = keyword.trim().toLowerCase();
 
@@ -106,8 +101,8 @@ function OrderManagement() {
         ? !main.mealPeriod || main.mealPeriod === "lunch"
         : main.mealPeriod === "dinner",
     );
-  const getOrdersForPeriod = (period) =>
-    filteredOrders.filter((order) => {
+  const getOrdersForPeriod = (period, sourceOrders = filteredOrders) =>
+    sourceOrders.filter((order) => {
       const day = order.selectedDay;
       return (
         getMainsForPeriod(day, period).length > 0 ||
@@ -121,6 +116,17 @@ function OrderManagement() {
     // Compatibility with older records that only have the whole-day flag.
     return Boolean(day?.received && !day?.receivedLunch && !day?.receivedDinner);
   };
+  const lunchOrders = getOrdersForPeriod("lunch", orders);
+  const dinnerOrders = getOrdersForPeriod("dinner", orders);
+  const receivedLunchCount = lunchOrders.filter((order) =>
+    isReceivedForPeriod(order.selectedDay, "lunch"),
+  ).length;
+  const receivedDinnerCount = dinnerOrders.filter((order) =>
+    isReceivedForPeriod(order.selectedDay, "dinner"),
+  ).length;
+  const notReceivedCount = orders.filter(
+    (order) => !order.selectedDay?.received,
+  ).length;
 
   const exportExcel = () => {
     const data = orders.map((order, index) => {
@@ -311,17 +317,46 @@ function OrderManagement() {
 
       {/* Thống kê */}
 
-      <div className="mb-6 grid grid grid-cols-1 gap-4 sm:grid-cols-3 gap-4">
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-xl border bg-white p-5 shadow">
           <p className="text-sm text-gray-500">Tổng đơn</p>
           <p className="mt-2 text-3xl font-bold">{orders.length}</p>
         </div>
 
         <div className="rounded-xl border bg-blue-50 p-5 shadow">
-          <p className="text-sm text-blue-600">Đã nhận hôm nay</p>
-          <p className="mt-2 text-3xl font-bold text-blue-700">
-            {receivedCount}
-          </p>
+          <p className="text-sm font-semibold text-blue-700">Buổi trưa</p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-xs text-blue-600">Tổng buổi trưa</p>
+              <p className="mt-1 text-2xl font-bold text-blue-700">
+                {lunchOrders.length}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-xs text-blue-600">Đã nhận</p>
+              <p className="mt-1 text-2xl font-bold text-blue-700">
+                {receivedLunchCount}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-blue-50 p-5 shadow">
+          <p className="text-sm font-semibold text-blue-700">Buổi chiều</p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-xs text-blue-600">Tổng buổi chiều</p>
+              <p className="mt-1 text-2xl font-bold text-blue-700">
+                {dinnerOrders.length}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <p className="whitespace-nowrap text-xs text-blue-600">Đã nhận</p>
+              <p className="mt-1 text-2xl font-bold text-blue-700">
+                {receivedDinnerCount}
+              </p>
+            </div>
+          </div>
         </div>
 
         <div className="rounded-xl border bg-red-50 p-5 shadow">

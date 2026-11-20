@@ -326,6 +326,32 @@ function WeekMenuEditor({
 
       return;
     }
+
+    const categories = ["rice", "vegetarian", "noodles", "soup"];
+    for (const [dayIndex, day] of days.entries()) {
+      const itemsFor = (period) => categories.flatMap((category) =>
+        (day.meals?.[period]?.[category] || []).map((dish) =>
+          typeof dish === "string" ? { name: dish, image: "" } : dish,
+        ),
+      );
+      const lunchItems = itemsFor("lunch").filter((dish) => dish.name?.trim() || dish.image);
+
+      if (lunchItems.length === 0) {
+        alert(`Ngày ${dayIndex + 1} (${day.name}): Buổi trưa cần ít nhất một món.`);
+        return;
+      }
+
+      for (const period of ["lunch", "dinner"]) {
+        for (const dish of itemsFor(period)) {
+          if (!dish.name?.trim() && !dish.image) continue;
+          if (!dish.name?.trim() || !dish.image) {
+            alert(`Ngày ${dayIndex + 1} (${day.name}): Mỗi món ${period === "lunch" ? "buổi trưa" : "buổi chiều"} phải có tên và ảnh.`);
+            return;
+          }
+        }
+      }
+    }
+
     const formData = new FormData();
 
     // ========================
@@ -417,8 +443,6 @@ function WeekMenuEditor({
       }))]))])),
     }));
 
-    console.log("DAYS", JSON.stringify(days, null, 2));
-
     formData.append(
       "days",
 
@@ -472,8 +496,6 @@ function WeekMenuEditor({
         });
       });
     });
-
-    console.log(JSON.stringify(jsonDays, null, 2));
 
     onSave(formData);
   };

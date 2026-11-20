@@ -62,7 +62,7 @@ function Header() {
 
         <header className="sticky top-0 z-50 border-b border-white/30 bg-white/20 backdrop-blur-xl">
 
-            <div className="mx-auto flex h-16 max-w-[1080px] items-center justify-between px-4 sm:h-[72px] sm:px-6 lg:px-10">
+            <div className="mx-auto flex h-16 max-w-[1120px] items-center justify-between px-4 sm:h-[72px] sm:px-6 lg:px-10">
 
                 {/* Logo */}
 
@@ -92,7 +92,7 @@ function Header() {
     onClick={() => changeLanguage("vi")}
     className={`px-3 py-2 transition ${
         i18n.language === "vi"
-            ? "bg-blue-500 text-white"
+            ? "bg-orange-500 text-white"
             : "text-gray-700 hover:bg-white/40"
     }`}
 >
@@ -103,7 +103,7 @@ function Header() {
     onClick={() => changeLanguage("en")}
     className={`px-3 py-2 transition ${
         i18n.language === "en"
-            ? "bg-blue-500 text-white"
+            ? "bg-orange-500 text-white"
             : "text-gray-700 hover:bg-white/40"
     }`}
 >
@@ -130,7 +130,7 @@ function Header() {
 
                         >
 
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white sm:h-10 sm:w-10">
+                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-600 text-sm font-bold text-white sm:h-10 sm:w-10">
 
                                 {user?.name?.charAt(0)}
 
@@ -266,7 +266,7 @@ function Header() {
 
             </div>
 
-            <div className="mx-auto max-w-[1080px] border-b-2 border-blue-400"></div>
+            <div className="mx-auto max-w-[1120px] border-b-2 border-orange-500"></div>
 
         </header>
 

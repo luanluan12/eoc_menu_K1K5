@@ -244,9 +244,15 @@ function DailyPeriodReport({ report, period }) {
     (header) => (header.mealPeriod || "lunch") === period,
   );
   const rows = report.rows.filter((row) =>
-    headers.some((header) => Number(row.items[header.name]) > 0),
+    headers.some((header) => Number(row.items[header.key || header.name]) > 0),
   );
   const periodLabel = period === "lunch" ? "Buổi trưa" : "Buổi chiều";
+  const optionLabels = [
+    ["rice", "Món cơm"],
+    ["vegetarian", "Món chay"],
+    ["noodles", "Món nước"],
+    ["soup", "Món soup"],
+  ];
 
   if (headers.length === 0) {
     return (
@@ -262,6 +268,21 @@ function DailyPeriodReport({ report, period }) {
       <h2 className="text-xl font-bold text-slate-900">{periodLabel}</h2>
       <div className="space-y-8">
       <section>
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-slate-800">Lựa chọn của nhân viên</h2>
+          <p className="mt-1 text-sm text-slate-500">Số người đã chọn từng nhóm món cho {periodLabel.toLowerCase()}.</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {optionLabels.map(([key, label]) => (
+            <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-sm font-semibold text-slate-500">{label}</p>
+              <strong className="mt-2 block text-2xl text-slate-900">{report.optionTotals?.[period]?.[key] || 0}</strong>
+              <span className="text-xs text-slate-500">người chọn</span>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section>
         <div className="mb-5">
           <h2 className="flex items-center gap-2 text-lg font-bold text-slate-800">
             <PieChart size={20} className="text-blue-600" />
@@ -276,16 +297,16 @@ function DailyPeriodReport({ report, period }) {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4 xl:grid-cols-6">
           {headers.map((header) => (
             <div
-              key={header.id}
+              key={header.key || header.id}
               className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-lg sm:p-5"
             >
               <p className="truncate text-xs font-semibold uppercase tracking-wide text-slate-400">
-                {header.name}
+                {header.label || header.name}
               </p>
 
               <div className="mt-4 flex items-end justify-between gap-2">
                 <strong className="text-2xl text-slate-900 sm:text-3xl">
-                  {report.totals[header.name] || 0}
+                  {report.totals[header.key || header.name] || 0}
                 </strong>
 
                 <span className="shrink-0 rounded-full bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-600">
@@ -314,8 +335,8 @@ function DailyPeriodReport({ report, period }) {
                 <TableHeader align="center">Bếp</TableHeader>
 
                 {headers.map((header) => (
-                  <TableHeader key={header.id} align="center">
-                    {header.name}
+                  <TableHeader key={header.key || header.id} align="center">
+                    {header.label || header.name}
                   </TableHeader>
                 ))}
 
@@ -334,8 +355,8 @@ function DailyPeriodReport({ report, period }) {
                   </td>
 
                   {headers.map((header) => (
-                    <td key={header.id} className="px-4 py-4 text-center">
-                      <CountBadge value={kitchen.items[header.name] || 0} />
+                    <td key={header.key || header.id} className="px-4 py-4 text-center">
+                      <CountBadge value={kitchen.items[header.key || header.name] || 0} />
                     </td>
                   ))}
 
@@ -375,9 +396,9 @@ function DailyPeriodReport({ report, period }) {
             <div className="grid grid-cols-2 gap-3 p-4 sm:p-5">
               {headers.map((header) => (
                 <FoodCard
-                  key={header.id}
-                  name={header.name}
-                  value={kitchen.items[header.name] || 0}
+                  key={header.key || header.id}
+                  name={header.label || header.name}
+                  value={kitchen.items[header.key || header.name] || 0}
                 />
               ))}
             </div>
@@ -404,8 +425,8 @@ function DailyPeriodReport({ report, period }) {
                 <TableHeader align="center">Bếp</TableHeader>
 
                 {headers.map((header) => (
-                  <TableHeader key={header.id} align="center">
-                    {header.name}
+                  <TableHeader key={header.key || header.id} align="center">
+                    {header.label || header.name}
                   </TableHeader>
                 ))}
               </tr>
@@ -428,8 +449,8 @@ function DailyPeriodReport({ report, period }) {
                   </td>
 
                   {headers.map((header) => (
-                    <td key={header.id} className="px-4 py-3 text-center">
-                      <CountBadge value={row.items[header.name] || 0} />
+                    <td key={header.key || header.id} className="px-4 py-3 text-center">
+                      <CountBadge value={row.items[header.key || header.name] || 0} />
                     </td>
                   ))}
                 </tr>
@@ -466,9 +487,9 @@ function DailyPeriodReport({ report, period }) {
               <div className="grid grid-cols-2 gap-3 p-4 sm:p-5">
                 {headers.map((header) => (
                   <FoodCard
-                    key={header.id}
-                    name={header.name}
-                    value={row.items[header.name] || 0}
+                  key={header.key || header.id}
+                  name={header.label || header.name}
+                  value={row.items[header.key || header.name] || 0}
                   />
                 ))}
               </div>
@@ -499,12 +520,13 @@ function LeftoverPeriodReport({ leftover, period }) {
   const users = leftover.users.filter(
     (user) => user.foodsByPeriod?.[period]?.length > 0,
   );
-  const getType = (type) =>
+  const getType = (type, category) =>
     ({
-      main: "Món cơm",
-      drink: "Món nước",
-      soup: "Món súp",
-    })[type] || type;
+      rice: "Món cơm",
+      vegetarian: "Món chay",
+      noodles: "Món nước",
+      soup: "Món soup",
+    })[category] || ({ main: "Món cơm", drink: "Món nước", soup: "Món soup" })[type] || type;
 
   return (
     <section className="space-y-6 rounded-3xl border border-slate-200 bg-slate-50 p-4 sm:p-6">
@@ -532,10 +554,10 @@ function LeftoverPeriodReport({ leftover, period }) {
                     </td>
                   </tr>
                 ) : periodLeftovers.map((item) => (
-                  <tr key={item.name} className="border-b">
+                  <tr key={item.key || item.name} className="border-b">
                     <td className="px-4 py-3">{item.name}</td>
                     <td className="px-4 py-3 text-center">
-                      {getType(item.type)}
+                      {getType(item.type, item.category)}
                     </td>
                     <td className="px-4 py-3 text-center font-bold text-red-600">
                       {item.quantity}
@@ -552,13 +574,13 @@ function LeftoverPeriodReport({ leftover, period }) {
             <EmptyState text={`Không có món chưa nhận cho ${periodLabel.toLowerCase()}.`} />
           ) : periodLeftovers.map((item) => (
             <div
-              key={item.name}
+              key={item.key || item.name}
               className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
             >
               <div className="min-w-0">
                 <p className="truncate font-bold text-slate-800">{item.name}</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  {getType(item.type)}
+                  {getType(item.type, item.category)}
                 </p>
               </div>
 
@@ -581,7 +603,7 @@ function LeftoverPeriodReport({ leftover, period }) {
                   <TableHeader align="center">Bếp</TableHeader>
 
                   {periodLeftovers.map((item) => (
-                    <TableHeader key={item.name} align="center">
+                    <TableHeader key={item.key || item.name} align="center">
                       {item.name}
                     </TableHeader>
                   ))}
@@ -597,8 +619,8 @@ function LeftoverPeriodReport({ leftover, period }) {
                     </td>
 
                     {periodLeftovers.map((item) => (
-                      <td key={item.name} className="px-4 py-3 text-center">
-                        {kitchen.items[item.name] || 0}
+                      <td key={item.key || item.name} className="px-4 py-3 text-center">
+                        {kitchen.items[item.key || item.name] || 0}
                       </td>
                     ))}
 
@@ -632,9 +654,9 @@ function LeftoverPeriodReport({ leftover, period }) {
               <div className="grid grid-cols-2 gap-3">
                 {periodLeftovers.map((item) => (
                   <FoodCard
-                    key={item.name}
+                    key={item.key || item.name}
                     name={item.name}
-                    value={kitchen.items[item.name] || 0}
+                    value={kitchen.items[item.key || item.name] || 0}
                   />
                 ))}
               </div>

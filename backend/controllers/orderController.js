@@ -63,164 +63,88 @@ const saveNewOrCancelledOrder = async ({ existingOrder, userId, menu, days }) =>
 // ===========================================
 
 const buildOrderDays = (menu, days) => {
-  const result = [];
-
-  if (
-    !Array.isArray(days) ||
-    ![5, 6].includes(days.length) ||
-    days.length !== menu.days.length
-  ) {
+  if (!Array.isArray(days) || days.length !== menu.days.length) {
     throw new Error("Số ngày đặt món phải khớp với menu.");
   }
 
-  for (let i = 0; i < menu.days.length; i++) {
-    const menuDay = menu.days[i];
-
-    const userDay = days[i];
-
-    const mains = userDay.mains || [];
-
-    const drink = userDay.drink || null;
-
-    const soup = userDay.soup || null;
-
-    const hasMain = mains.length > 0;
-
-    const hasDrink = !!drink;
-
-    const hasSoup = !!soup;
-
-    if (menuDay.orderingClosed && (hasMain || hasDrink || hasSoup)) {
-      throw new Error(`Ngày ${i + 1} đã đóng đặt món.`);
+  const categories = ["rice", "vegetarian", "noodles", "soup"];
+  return menu.days.map((menuDay, dayIndex) => {
+    if (menuDay.orderingClosed) {
+      return { date: menuDay.date, mains: [], selections: { lunch: "", dinner: "" }, drink: null, soup: null };
     }
 
-    const hasFlexibleSelections = mains.some((item) => item.mealPeriod);
-    const totalGroup = Number(hasMain) + Number(hasDrink) + Number(hasSoup);
-
-    // Không chọn gì => nghỉ ăn
-    if (totalGroup === 0) {
-      result.push({
-        date: menuDay.date,
-
-        mains: [],
-
-        drink: null,
-
-        soup: null,
-
-        received: false,
-
-        receivedAt: null,
-      });
-
-      continue;
+    const flexibleMains = ["lunch", "dinner"].flatMap((mealPeriod) =>
+      categories.flatMap((category) =>
+        (menuDay.meals?.[mealPeriod]?.[category] || [])
+          .filter((dish) => dish?.name?.trim())
+          .map((dish) => ({ dish, mealPeriod, category })),
+      ),
+    );
+    const menuOptions = flexibleMains.length > 0
+      ? flexibleMains
+      : [
+          ...(menuDay.mains || []).map((dish) => ({ dish, mealPeriod: "lunch", category: dish.vegetarian ? "vegetarian" : "rice" })),
+          ...(menuDay.drinks || []).map((dish) => ({ dish, mealPeriod: "lunch", category: "noodles" })),
+          ...(menuDay.soups || []).map((dish) => ({ dish, mealPeriod: "lunch", category: "soup" })),
+        ];
+    const lunchOptions = menuOptions.filter((item) => item.mealPeriod === "lunch");
+    const dinnerOptions = menuOptions.filter((item) => item.mealPeriod === "dinner");
+    if (lunchOptions.length === 0) {
+      throw new Error(`Ngày ${dayIndex + 1}: Buổi trưa chưa có món trong menu.`);
     }
 
-    // Chỉ được chọn tối đa 1 nhóm
-    if (!hasFlexibleSelections && totalGroup > 1) {
-      throw new Error(`Ngày ${i + 1}: Chỉ được chọn 1 nhóm.`);
-    }
-
-    // ===================================
-    // MAIN
-    // ===================================
-
-    const savedMains = [];
-
-    if (hasMain) {
-      const totalQuantity = mains.reduce(
-        (sum, item) => sum + Number(item.quantity),
-
-        0,
-      );
-
-      if (!hasFlexibleSelections && totalQuantity > 2) {
-        throw new Error(`Ngày ${i + 1}: Tối đa 2 phần.`);
+    const requestedMains = (days[dayIndex]?.mains || []).filter((item) => Number(item.quantity || 1) > 0);
+    const requestedSelections = days[dayIndex]?.selections || {};
+    const selectedCategories = {};
+    for (const period of ["lunch", "dinner"]) {
+      const categoriesFromMains = [...new Set(requestedMains
+        .filter((item) => (item.mealPeriod === "dinner" ? "dinner" : "lunch") === period)
+        .map((item) => categories.includes(item.category) ? item.category : item.vegetarian ? "vegetarian" : "rice"))];
+      const category = requestedSelections[period] || categoriesFromMains[0] || null;
+      if (category && !categories.includes(category)) {
+        throw new Error(`Ngày ${dayIndex + 1}: Loại món ${period === "lunch" ? "buổi trưa" : "buổi chiều"} không hợp lệ.`);
       }
-
-      for (const item of mains) {
-        const category = item.category;
-        const period = item.mealPeriod;
-        const dish = period
-          ? menuDay.meals?.[period]?.[category]?.find((candidate) => String(candidate._id) === String(item.dishId))
-          : menuDay.mains.id(item.dishId);
-
-        if (!dish) {
-          throw new Error(`Ngày ${i + 1}: Món cơm không tồn tại.`);
-        }
-
-        savedMains.push({
-          dishId: dish._id,
-
-          name: dish.name,
-
-          nameEn: dish.nameEn || "",
-
-          image: dish.image,
-
-          quantity: item.quantity,
-          mealPeriod: period || "",
-          category: category || "",
-        });
+      if (categoriesFromMains.some((value) => value !== category)) {
+        throw new Error(`Ngày ${dayIndex + 1}: Chỉ được chọn một option cho mỗi buổi.`);
       }
+      selectedCategories[period] = category;
+    }
+    if (!selectedCategories.lunch) {
+      throw new Error(`Ngày ${dayIndex + 1}: Vui lòng chọn một option buổi trưa.`);
+    }
+    if (selectedCategories.dinner && dinnerOptions.length === 0) {
+      throw new Error(`Ngày ${dayIndex + 1}: Buổi chiều không có menu để chọn.`);
     }
 
-    // ===================================
-    // DRINK
-    // ===================================
-
-    let savedDrink = null;
-
-    if (hasDrink) {
-      const dish = menuDay.drinks.id(drink.dishId);
-
-      if (!dish) {
-        throw new Error(`Ngày ${i + 1}: Món nước không tồn tại.`);
+    const selectedOptions = ["lunch", "dinner"].flatMap((period) => {
+      const category = selectedCategories[period];
+      if (!category) return [];
+      const matches = menuOptions.filter((item) => item.mealPeriod === period && item.category === category);
+      if (matches.length === 0) {
+        throw new Error(`Ngày ${dayIndex + 1}: Option đã chọn không có món trong menu.`);
       }
-
-      savedDrink = {
-        dishId: dish._id,
-
-        name: dish.name,
-
-        image: dish.image,
-      };
-    }
-
-    // ===================================
-    // SOUP
-    // ===================================
-
-    let savedSoup = null;
-
-    if (hasSoup) {
-      const dish = menuDay.soups.id(soup.dishId);
-
-      if (!dish) {
-        throw new Error(`Ngày ${i + 1}: Món súp không tồn tại.`);
-      }
-
-      savedSoup = {
-        dishId: dish._id,
-
-        name: dish.name,
-
-        image: dish.image,
-      };
-    }
-
-    result.push({
-      date: menuDay.date,
-
-      mains: savedMains,
-
-      drink: savedDrink,
-
-      soup: savedSoup,
+      return matches;
     });
-  }
 
-  return result;
+    return {
+      date: menuDay.date,
+      selections: {
+        lunch: selectedCategories.lunch || "",
+        dinner: selectedCategories.dinner || "",
+      },
+      mains: selectedOptions.map(({ dish, mealPeriod, category }) => ({
+        dishId: dish._id,
+        name: dish.name,
+        nameEn: dish.nameEn || "",
+        image: dish.image || "",
+        quantity: 1,
+        mealPeriod,
+        category,
+      })),
+      drink: null,
+      soup: null,
+    };
+  });
 };
 
 // ===========================================

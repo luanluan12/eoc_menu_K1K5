@@ -33,7 +33,7 @@ function FlexibleMealsEditor({ day, onChange }) {
   };
   return <div className="space-y-6">
     {[["lunch", "Buổi trưa"], ["dinner", "Buổi chiều"]].map(([period, label]) => <section key={period} className="rounded-2xl border p-4 sm:p-6">
-      <h2 className="mb-5 text-xl font-bold text-slate-800">{label} <span className="text-sm font-normal text-slate-500">(không bắt buộc)</span></h2>
+      <h2 className="mb-5 text-xl font-bold text-slate-800">{label} <span className={`text-sm font-semibold ${period === "lunch" ? "text-red-600" : "text-slate-500"}`}>{period === "lunch" ? "(bắt buộc · cần tên và ảnh)" : "(không bắt buộc)"}</span></h2>
       <div className="grid gap-5 md:grid-cols-2">
         {MEAL_GROUPS.map(([category, title]) => <div key={category} className="rounded-xl bg-slate-50 p-4">
           <div className="mb-3 flex items-center justify-between gap-2"><h3 className="font-semibold">{title}</h3><button type="button" onClick={() => add(period, category)} className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white">+ Thêm món</button></div>

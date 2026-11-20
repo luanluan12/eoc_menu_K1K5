@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { toast } from "react-toastify";
 
 import DayTabs from "./DayTabs";
 import FoodGroup from "./FoodGroup";
@@ -7,6 +6,61 @@ import OrderNotice from "./OrderNotice";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { useTranslation } from "react-i18next";
+
+const MEAL_CATEGORIES = ["rice", "vegetarian", "noodles", "soup"];
+
+function getMealsForDisplay(day) {
+  const flexible = day?.meals || {};
+  const hasFlexibleDishes = ["lunch", "dinner"].some((period) =>
+    MEAL_CATEGORIES.some((category) => (flexible[period]?.[category] || []).length > 0),
+  );
+  if (hasFlexibleDishes) return flexible;
+
+  return {
+    lunch: {
+      rice: day?.mains || [],
+      vegetarian: [],
+      noodles: day?.drinks || [],
+      soup: day?.soups || [],
+    },
+    dinner: { rice: [], vegetarian: [], noodles: [], soup: [] },
+  };
+}
+
+function makeOrderDays(menuDays = [], initialOrder = null) {
+  return menuDays.map((day, index) => {
+    const existing = initialOrder?.days?.find((orderDay) =>
+      new Date(orderDay.date).toDateString() === new Date(day.date).toDateString(),
+    ) || initialOrder?.days?.[index];
+    let savedMains = (existing?.mains || []).map((item) => ({
+      ...item,
+      mealPeriod: item.mealPeriod === "dinner" ? "dinner" : "lunch",
+      category: MEAL_CATEGORIES.includes(item.category) ? item.category : item.vegetarian ? "vegetarian" : "rice",
+      quantity: 1,
+    }));
+    if (savedMains.length === 0 && (existing?.drink || existing?.soup)) {
+      const legacyDish = existing.drink || existing.soup;
+      savedMains.push({ ...legacyDish, category: existing.drink ? "noodles" : "soup", mealPeriod: "lunch", quantity: 1 });
+    }
+    const selections = Object.fromEntries(["lunch", "dinner"].map((period) => {
+      const selection = existing?.selections?.[period]
+        || savedMains.find((item) => item.mealPeriod === period)?.category
+        || null;
+      return [period, selection];
+    }));
+    savedMains = ["lunch", "dinner"].flatMap((period) => {
+      const category = selections[period];
+      return category ? savedMains.filter((item) => item.mealPeriod === period && item.category === category) : [];
+    });
+    return {
+      date: day.date,
+      mains: savedMains,
+      selections,
+      drink: null,
+      soup: null,
+    };
+  });
+}
 
 function WeekMenuContent({
   menu,
@@ -40,150 +94,42 @@ function WeekMenuContent({
 
   useEffect(() => {
     if (!menu) return;
-
-    if (initialOrder?.days) {
-      setOrders(initialOrder.days);
-      return;
-    }
-
-    setOrders(
-      menu.days.map((day) => ({
-        date: day.date,
-        mains: [],
-        drink: null,
-        soup: null,
-      })),
-    );
+    setOrders(makeOrderDays(menu.days, initialOrder));
   }, [menu, initialOrder]);
 
   if (!menu) return null;
 
   const day = menu.days[currentDay];
+  const displayedMeals = getMealsForDisplay(day);
 
-  // =========================
-  // MAIN
-  // =========================
-
-  const changeMainQuantity = (dish, quantity) => {
-    if (!editable) return;
-
-    const clone = [...orders];
-    const current = { ...clone[currentDay] };
-
-    if (current.drink || current.soup) {
-      toast.warning(t("warning_other_group"));
-      return;
-    }
-
-    let mains = [...current.mains];
-
-    const index = mains.findIndex(
-      (item) => String(item.dishId) === String(dish._id),
-    );
-
-    if (index === -1) {
-      if (quantity <= 0) return;
-
-      const total = mains.reduce((sum, item) => sum + item.quantity, 0);
-
-      if (total + quantity > 2) {
-        toast.warning(t("warning_max_main"));
-        return;
-      }
-
-      mains.push({
-        dishId: dish._id,
-        name: dish.name,
-        image: dish.image,
-        quantity,
-      });
-    } else {
-      const totalWithoutCurrent = mains.reduce(
-        (sum, item, i) => (i === index ? sum : sum + item.quantity),
-        0,
+  const selectOption = (period, category) => {
+    setOrders((current) => current.map((orderDay, index) => {
+      if (index !== currentDay) return orderDay;
+      const alreadySelected = orderDay.selections?.[period] === category;
+      const nextCategory = alreadySelected ? null : category;
+      const otherPeriodSelections = orderDay.mains.filter((item) =>
+        (item.mealPeriod === "dinner" ? "dinner" : "lunch") !== period,
       );
-
-      if (quantity <= 0) {
-        mains.splice(index, 1);
-      } else {
-        if (totalWithoutCurrent + quantity > 2) {
-          toast.warning(t("warning_max_main"));
-          return;
-        }
-
-        mains[index] = {
-          ...mains[index],
-          quantity,
-        };
-      }
-    }
-
-    current.mains = mains;
-    clone[currentDay] = current;
-    setOrders(clone);
-  };
-
-  // =========================
-  // DRINK
-  // =========================
-
-  const toggleDrink = (dish) => {
-    if (!editable) return;
-
-    const clone = [...orders];
-    const current = { ...clone[currentDay] };
-
-    if (current.mains.length > 0 || current.soup) {
-      toast.warning(t("warning_other_group"));
-      return;
-    }
-
-    if (current.drink && String(current.drink.dishId) === String(dish._id)) {
-      current.drink = null;
-    } else {
-      current.drink = {
-        dishId: dish._id,
-        name: dish.name,
-        image: dish.image,
+      const groupDishes = nextCategory
+        ? (displayedMeals[period]?.[nextCategory] || [])
+          .filter((dish) => (typeof dish === "string" ? dish.trim() : dish?.name?.trim()))
+          .map((dish) => ({
+            dishId: dish._id,
+            name: dish.name || dish,
+            nameEn: dish.nameEn || "",
+            image: dish.image || "",
+            quantity: 1,
+            mealPeriod: period,
+            category: nextCategory,
+          }))
+        : [];
+      return {
+        ...orderDay,
+        mains: [...otherPeriodSelections, ...groupDishes],
+        selections: { ...(orderDay.selections || {}), [period]: nextCategory },
       };
-    }
-
-    clone[currentDay] = current;
-    setOrders(clone);
+    }));
   };
-
-  // =========================
-  // SOUP
-  // =========================
-
-  const toggleSoup = (dish) => {
-    if (!editable) return;
-
-    const clone = [...orders];
-    const current = { ...clone[currentDay] };
-
-    if (current.mains.length > 0 || current.drink) {
-      toast.warning(t("warning_other_group"));
-      return;
-    }
-
-    if (current.soup && String(current.soup.dishId) === String(dish._id)) {
-      current.soup = null;
-    } else {
-      current.soup = {
-        dishId: dish._id,
-        name: dish.name,
-        image: dish.image,
-      };
-    }
-
-    clone[currentDay] = current;
-    setOrders(clone);
-  };
-
-  // =========================
-  // Helpers
-  // =========================
 
   const formatDateTime = (date) => {
     if (!date) return "";
@@ -193,152 +139,28 @@ function WeekMenuContent({
     return new Date(date).toLocaleString(locale);
   };
 
-  const getMainQuantity = (dishId) => {
-    const item = orders[currentDay]?.mains.find(
-      (m) => String(m.dishId) === String(dishId),
-    );
-
-    return item ? item.quantity : 0;
-  };
-
-  const isDrinkSelected = (dishId) =>
-    String(orders[currentDay]?.drink?.dishId || "") === String(dishId);
-
-  const isSoupSelected = (dishId) =>
-    String(orders[currentDay]?.soup?.dishId || "") === String(dishId);
-
-  const toggleFlexibleDish = (dish, mealPeriod, category) => {
-    if (!editable) return;
-    const clone = [...orders];
-    const current = { ...clone[currentDay] };
-    const selected = [...(current.mains || [])];
-    const index = selected.findIndex((item) => String(item.dishId) === String(dish._id));
-    if (index >= 0) selected.splice(index, 1);
-    else selected.push({ dishId: dish._id, name: dish.name || "", nameEn: dish.nameEn || "", image: dish.image || "", quantity: 1, mealPeriod, category });
-    current.mains = selected;
-    current.drink = null;
-    current.soup = null;
-    clone[currentDay] = current;
-    setOrders(clone);
-  };
-  const isFlexibleSelected = (dishId) =>
-    (orders[currentDay]?.mains || []).some((item) => String(item.dishId) === String(dishId));
-
-  const disableMain = () =>
-    isDayClosed || !!orders[currentDay]?.drink || !!orders[currentDay]?.soup;
-
-  const disableDrink = () =>
-    isDayClosed || orders[currentDay]?.mains.length > 0 || !!orders[currentDay]?.soup;
-
-  const disableSoup = () =>
-    isDayClosed || orders[currentDay]?.mains.length > 0 || !!orders[currentDay]?.drink;
-  // =========================
-
-  const getUnselectedDays = () => {
-    const dayKeys = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
-
-    return orders
-      .map((order, index) => {
-        const hasMain = order.mains.length > 0;
-        const hasDrink = !!order.drink;
-        const hasSoup = !!order.soup;
-
-        if (hasMain || hasDrink || hasSoup) {
-          return null;
-        }
-
-        return t(dayKeys[index]);
-      })
-      .filter(Boolean);
-  };
-  // Submit
-  // =========================
   const handleSubmit = async () => {
     if (!editable) return;
 
     if (!onSubmit) return;
-    const unselectedDays = getUnselectedDays();
 
-    if (!isManualOrder && unselectedDays.length > 0) {
-      const result = await Swal.fire({
-        icon: "warning",
-
-        title: t("confirm_order_title"),
-
-        html: `
-            <div style="text-align:left">
-
-                <p>${t("confirm_order_content")}</p>
-
-                <ul style="margin-top:10px">
-
-                    ${unselectedDays
-                      .map((day) => `<li style="margin:6px 0">• ${day}</li>`)
-                      .join("")}
-
-                </ul>
-
-                <p style="margin-top:16px;color:#dc2626">
-
-                    ${t("confirm_order_warning")}
-
-                </p>
-
-            </div>
-        `,
-
-        showCancelButton: true,
-
-        confirmButtonText: t("confirm_order"),
-
-        cancelButtonText: t("go_back"),
-
-        confirmButtonColor: "#3b82f6",
-
-        cancelButtonColor: "#6b7280",
-
-        reverseButtons: true,
-      });
-
-      if (!result.isConfirmed) {
+    for (const [index, menuDay] of menu.days.entries()) {
+      if (menuDay.orderingClosed) continue;
+      const selected = orders[index]?.mains || [];
+      const selectedLunchOption = orders[index]?.selections?.lunch
+        || selected.find((item) => item.mealPeriod !== "dinner")?.category;
+      if (!selectedLunchOption) {
+        await Swal.fire({ icon: "warning", title: t("choose_lunch_required"), confirmButtonColor: "#2563eb" });
+        setCurrentDay(index);
         return;
       }
-    }
-
-    // Validate
-    for (const day of orders) {
-      const hasFlexible = day.mains.some((item) => item.mealPeriod);
-      if (hasFlexible) continue;
-      const hasMain = day.mains.length > 0;
-
-      const hasDrink = !!day.drink;
-
-      const hasSoup = !!day.soup;
-      // Nếu chọn món cơm thì bắt buộc đủ 2 phần
-      if (hasMain) {
-        const totalMain = day.mains.reduce(
-          (sum, item) => sum + item.quantity,
-
-          0,
-        );
-
-        if (totalMain !== 2) {
-          toast.warning(t("warning_main_exactly_2"));
-
-          return;
-        }
-      }
-
-      // Không chọn gì => nghỉ ăn
-      if (!hasMain && !hasDrink && !hasSoup) {
-        continue;
-      }
-
-      const groupCount = Number(hasMain) + Number(hasDrink) + Number(hasSoup);
-
-      if (groupCount > 1) {
-        toast.warning(t("warning_one_group_only"));
-
+      const meals = getMealsForDisplay(menuDay);
+      const hasAfternoonMenu = MEAL_CATEGORIES.some((category) => (meals.dinner?.[category] || []).length > 0);
+      const selectedDinnerOption = orders[index]?.selections?.dinner
+        || selected.find((item) => item.mealPeriod === "dinner")?.category;
+      if (!hasAfternoonMenu && selectedDinnerOption) {
+        await Swal.fire({ icon: "warning", title: t("afternoon_menu_unavailable"), confirmButtonColor: "#2563eb" });
+        setCurrentDay(index);
         return;
       }
     }
@@ -348,11 +170,7 @@ function WeekMenuContent({
 
       const success = await onSubmit(orders);
 
-      console.log("E");
-
       if (!success) return;
-
-      setLoading(false);
 
       if (isAdminEdit) {
         return;
@@ -381,9 +199,7 @@ function WeekMenuContent({
 
       navigate("/history");
     } finally {
-      if (loading) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   };
 
@@ -398,11 +214,11 @@ function WeekMenuContent({
   const expired = new Date() > new Date(menu.deadline);
 
   return (
-    <div className="mx-auto w-full max-w-[1080px] px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
+    <div className="mx-auto w-full max-w-[1120px] px-4 py-5 sm:px-6 lg:px-10 lg:py-8">
       {loading && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="flex flex-col items-center rounded-2xl bg-white px-10 py-8 shadow-2xl">
-            <div className="h-14 w-14 animate-spin rounded-full border-4 border-blue-500 border-t-transparent"></div>
+            <div className="h-14 w-14 animate-spin rounded-full border-4 border-orange-500 border-t-transparent"></div>
 
             <h3 className="mt-6 text-xl font-bold">{t("submitting_order")}</h3>
 
@@ -440,84 +256,50 @@ function WeekMenuContent({
       )}
       {!isReadonly && (
         <div className="mb-10">
-          <OrderNotice flexible={Boolean(day.meals)} />
+          <OrderNotice flexible />
         </div>
       )}
 
-      {day.meals ? (
-        <div className="space-y-10">
-          {[["lunch", t("meal_lunch")], ["dinner", t("meal_dinner")]].map(([period, periodLabel]) => (
-            <section key={period} className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
-              <h2 className="mb-6 text-xl font-bold text-slate-800">{periodLabel}</h2>
-              <div className="space-y-8">
-                {[["rice", t("meal_rice")], ["vegetarian", t("meal_vegetarian")], ["noodles", t("meal_noodles")], ["soup", t("meal_soup")]].map(([category, label]) => (
-                  <FoodGroup key={category} title={label} subtitle={t("choose_multiple")} foods={(day.meals?.[period]?.[category] || []).filter((dish) => dish.name?.trim())} type="drink" disabled={expired || isDayClosed || !editable} selected={isFlexibleSelected} onSelect={(dish) => toggleFlexibleDish(dish, period, category)} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      ) : <>
-      {/* Món cơm */}
-
-      <FoodGroup
-        title={t("main_dish")}
-        subtitle={t("max_2_portions")}
-        foods={day.mains || []}
-        type="main"
-        disabled={expired || disableMain()}
-        quantityOf={getMainQuantity}
-        onQuantityChange={changeMainQuantity}
-      />
-
-      {/* Món nước */}
-
-      <div className="mt-10">
-        <FoodGroup
-          title={t("drink")}
-          subtitle={t("choose_1")}
-          foods={day.drinks || []}
-          type="drink"
-          disabled={expired || disableDrink()}
-          selected={isDrinkSelected}
-          onSelect={toggleDrink}
-        />
+      <div className="space-y-10">
+        {[["lunch", t("meal_lunch"), t("meal_required")], ["dinner", t("meal_dinner"), t("meal_optional")]].map(([period, periodLabel, requirement]) => (
+          <section key={period} className="rounded-2xl py-2 sm:py-3">
+            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-slate-800">
+              {periodLabel}
+            </h2>
+            {!isReadonly && <p className="-mt-3 mb-5 text-sm text-slate-500">{t("choose_one_option")}</p>}
+            {MEAL_CATEGORIES.some((category) => (displayedMeals[period]?.[category] || []).length > 0) ? (
+            <div className="space-y-8">
+              {[["rice", t("meal_rice")], ["vegetarian", t("meal_vegetarian")], ["noodles", t("meal_noodles")], ["soup", t("meal_soup")]].map(([category, label]) => {
+                const foods = (displayedMeals[period]?.[category] || []).filter((dish) => (typeof dish === "string" ? dish.trim() : dish.name?.trim()));
+                if (!foods.length) return null;
+                const selectedOption = orders[currentDay]?.selections?.[period]
+                  || orders[currentDay]?.mains.find((item) => (item.mealPeriod === "dinner" ? "dinner" : "lunch") === period)?.category;
+                return (
+                  <FoodGroup
+                    key={category}
+                    title={label}
+                    foods={foods}
+                    type="main"
+                    readOnly
+                    optionSelectable={!isReadonly && editable && !isDayClosed}
+                    optionSelected={selectedOption === category}
+                    onSelectOption={() => selectOption(period, category)}
+                  />
+                );
+              })}
+            </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/60 p-6 text-center text-slate-500">{t("no_meal_period_menu")}</div>
+            )}
+          </section>
+        ))}
       </div>
-
-      {/* Cháo */}
-
-      <div className="mt-10">
-        <FoodGroup
-          title={t("soup")}
-          subtitle={t("choose_1")}
-          foods={day.soups || []}
-          type="soup"
-          disabled={expired || disableSoup()}
-          selected={isSoupSelected}
-          onSelect={toggleSoup}
-        />
-      </div>
-
-      {/* Tráng miệng */}
-
-      {day.desserts?.length > 0 && (
-        <div className="mt-10">
-          <FoodGroup
-            title={t("dessert")}
-            subtitle={t("free_gift")}
-            foods={day.desserts}
-            type="dessert"
-            disabled
-          />
-        </div>
-      )}
-      </>}
 
       {!isReadonly && (
         <div className="mt-14 flex justify-center">
         <button
             onClick={handleSubmit}
-            disabled={expired || isDayClosed}
+            disabled={expired}
             className={`
                 rounded-2xl
                 px-14
@@ -529,13 +311,13 @@ function WeekMenuContent({
                 transition-all
                 duration-300
                 ${
-                  expired || isDayClosed
+                  expired
                     ? "cursor-not-allowed bg-gray-400"
-                    : "bg-blue-500 hover:bg-blue-600 hover:shadow-xl active:scale-95"
+                    : "bg-orange-500 hover:bg-orange-600 hover:shadow-xl active:scale-95"
                 }
             `}
           >
-            {isDayClosed ? t("day_off") : expired ? t("expired") : t(submitText)}
+            {expired ? t("expired") : t(submitText)}
           </button>
         </div>
       )}

@@ -17,9 +17,9 @@ function OrderNotice({ flexible = false }) {
                 gap-5
                 rounded-3xl
                 bg-gradient-to-r
-                from-blue-50
-                via-blue-50
-                to-blue-50
+                from-orange-50
+                via-orange-50
+                to-orange-50
                 p-5
                 shadow-sm
 
@@ -46,7 +46,7 @@ function OrderNotice({ flexible = false }) {
                         items-center
                         justify-center
                         rounded-full
-                        bg-blue-500
+                        bg-orange-500
                         text-white
                         shadow-lg
 
@@ -65,11 +65,11 @@ function OrderNotice({ flexible = false }) {
 
                     <p className="text-base font-semibold leading-7 text-slate-800 sm:text-lg">
 
-                        {flexible ? t("notice_flexible") : <>
+                        {flexible ? t("notice_automatic") : <>
 
                         {t("notice_prefix")}
 
-                        <span className="text-blue-500">
+                        <span className="text-orange-600">
 
                             {" "}
                             {t("notice_main")}
@@ -80,7 +80,7 @@ function OrderNotice({ flexible = false }) {
 
                         {t("notice_or")}
 
-                        <span className="text-blue-500">
+                        <span className="text-orange-600">
 
                             {" "}
                             {t("notice_side")}
@@ -91,11 +91,7 @@ function OrderNotice({ flexible = false }) {
 
                     </p>
 
-                    <p className="mt-2 text-sm text-slate-500 sm:text-[15px]">
-
-                        {t("skip_day_message")}
-
-                    </p>
+                    {flexible && <p className="mt-2 text-sm text-slate-500 sm:text-[15px]">{t("notice_automatic_detail")}</p>}
 
                 </div>
 

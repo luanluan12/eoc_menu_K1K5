@@ -32,6 +32,58 @@ const normalizeMeals = async (meals = {}, resolveImage = async (_period, _catego
   return result;
 };
 
+const validateMealMenuDays = (days, files = []) => {
+  const fileFields = new Set(files.map((file) => file.fieldname));
+  const categories = ["rice", "vegetarian", "noodles", "soup"];
+
+  for (const [dayIndex, day] of days.entries()) {
+    const flexibleItems = (period) => categories.flatMap((category) =>
+      (day.meals?.[period]?.[category] || []).map((dish, dishIndex) => ({
+        dish: typeof dish === "string" ? { name: dish } : dish,
+        imageField: `meal_${dayIndex}_${period}_${category}_${dishIndex}_image`,
+      })),
+    );
+    const hasAnyFlexibleItems = ["lunch", "dinner"].some((period) =>
+      flexibleItems(period).some(({ dish }) => dish?.name?.trim() || dish?.image),
+    );
+
+    if (!hasAnyFlexibleItems) {
+      const legacyLunch = [
+        ...(day.mains || []).map((dish, index) => ({ dish, field: `main_${dayIndex}_${index}_image` })),
+        ...(day.drinks || []).map((dish, index) => ({ dish, field: `drink_${dayIndex}_${index}_image` })),
+        ...(day.soups || []).map((dish, index) => ({ dish, field: `soup_${dayIndex}_${index}_image` })),
+      ];
+      const lunchItems = legacyLunch.filter(({ dish }) => dish?.name?.trim() || dish?.image);
+      if (lunchItems.length === 0) {
+        throw new Error(`Ngày ${dayIndex + 1}: Buổi trưa cần ít nhất một món.`);
+      }
+      const incomplete = lunchItems.find(({ dish, field }) =>
+        !dish?.name?.trim() || !(dish?.image || fileFields.has(field)),
+      );
+      if (incomplete) {
+        throw new Error(`Ngày ${dayIndex + 1}: Mỗi món buổi trưa phải có tên và ảnh.`);
+      }
+      continue;
+    }
+
+    const lunchItems = flexibleItems("lunch");
+    const meaningfulLunchItems = lunchItems.filter(({ dish }) => dish?.name?.trim() || dish?.image);
+    if (meaningfulLunchItems.length === 0) {
+      throw new Error(`Ngày ${dayIndex + 1}: Buổi trưa cần ít nhất một món.`);
+    }
+
+    for (const period of ["lunch", "dinner"]) {
+      for (const { dish, imageField } of flexibleItems(period)) {
+        if (!dish?.name?.trim() && !dish?.image) continue;
+        if (!dish?.name?.trim() || !(dish?.image || fileFields.has(imageField))) {
+          const periodLabel = period === "lunch" ? "buổi trưa" : "buổi chiều";
+          throw new Error(`Ngày ${dayIndex + 1}: Mỗi món ${periodLabel} phải có tên và ảnh.`);
+        }
+      }
+    }
+  }
+};
+
 exports.createMenu = async (req, res) => {
   try {
     const { week, year, openTime, deadline } = req.body;
@@ -74,6 +126,12 @@ exports.createMenu = async (req, res) => {
 
         message: "Một tuần phải có đúng 6 ngày.",
       });
+    }
+
+    try {
+      validateMealMenuDays(days, req.files || []);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
     }
 
     const findFile = (fieldName) => {
@@ -324,6 +382,12 @@ exports.updateMenu = async (req, res) => {
 
         message: "Menu phải có 5 hoặc 6 ngày.",
       });
+    }
+
+    try {
+      validateMealMenuDays(days, req.files || []);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
     }
     const findFile = (fieldName) => {
       return req.files.find((file) => file.fieldname === fieldName);
@@ -637,6 +701,12 @@ exports.publishMenu = async (req, res) => {
 
         message: "Menu đã được Publish.",
       });
+    }
+
+    try {
+      validateMealMenuDays(menu.days, []);
+    } catch (validationError) {
+      return res.status(400).json({ success: false, message: validationError.message });
     }
 
     // Publish Menu

@@ -36,7 +36,7 @@ function DayTabs({ days, currentDay, onChange, completed }) {
 
             </h2>
 
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            <div className="flex gap-4 overflow-x-auto px-2 pb-3 pt-2 scrollbar-hide">
 
                 {
 
@@ -72,8 +72,8 @@ function DayTabs({ days, currentDay, onChange, completed }) {
 
                                     ${
                                         active
-                                            ? "border-blue-500 bg-blue-500 shadow-lg"
-                                            : "border-gray-200 bg-white shadow-sm hover:border-blue-300 hover:shadow-md"
+                                            ? "border-orange-500 bg-orange-500 shadow-lg"
+                                            : "border-gray-200 bg-white shadow-sm hover:border-orange-300 hover:shadow-md"
                                     }
                                 `}
 
@@ -93,7 +93,7 @@ function DayTabs({ days, currentDay, onChange, completed }) {
             items-center
             justify-center
             rounded-full
-            bg-blue-500
+            bg-orange-500
             ring-2
             ring-white
             shadow-lg
@@ -129,8 +129,8 @@ function DayTabs({ days, currentDay, onChange, completed }) {
 
                                         ${
                                             active
-                                                ? "bg-white text-blue-500"
-                                                : "bg-blue-100 text-blue-500"
+                                                ? "bg-white text-orange-600"
+                                                : "bg-orange-100 text-orange-600"
                                         }
                                     `}
                                 >

@@ -1,4 +1,5 @@
 import {
+    Check,
     UtensilsCrossed,
     CupSoda,
     Soup,
@@ -21,8 +22,12 @@ function FoodGroup({
     onQuantityChange,
     onSelect,
     selectedText,
+    readOnly = false,
+    optionSelectable = false,
+    optionSelected = false,
+    onSelectOption,
 }) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const getIcon = () => {
         switch (type) {
             case "main":
@@ -46,30 +51,30 @@ function FoodGroup({
         switch (type) {
             case "main":
                 return {
-                    bg: "bg-blue-100",
-                    text: "text-blue-500",
-                    selected: "text-blue-500",
+                    bg: "bg-orange-100",
+                    text: "text-orange-600",
+                    selected: "text-orange-600",
                 };
 
             case "drink":
                 return {
-                    bg: "bg-blue-100",
-                    text: "text-blue-500",
-                    selected: "text-blue-500",
+                    bg: "bg-orange-100",
+                    text: "text-orange-600",
+                    selected: "text-orange-600",
                 };
 
             case "soup":
                 return {
-                    bg: "bg-blue-100",
-                    text: "text-blue-500",
-                    selected: "text-blue-500",
+                    bg: "bg-orange-100",
+                    text: "text-orange-600",
+                    selected: "text-orange-600",
                 };
 
             default:
                 return {
-                    bg: "bg-blue-100",
-                    text: "text-blue-500",
-                    selected: "text-blue-500",
+                    bg: "bg-orange-100",
+                    text: "text-orange-600",
+                    selected: "text-orange-600",
                 };
         }
     };
@@ -83,7 +88,7 @@ function FoodGroup({
         <section className="w-full">
             {/* Header */}
 
-            <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
                 <div className="flex items-start gap-3 sm:items-center sm:gap-4">
 
@@ -122,6 +127,18 @@ function FoodGroup({
                     </div>
                 )}
 
+                {optionSelectable && (
+                    <button
+                        type="button"
+                        aria-pressed={optionSelected}
+                        onClick={onSelectOption}
+                        className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border px-4 py-2 font-semibold transition ${optionSelected ? "border-orange-500 bg-orange-500 text-white" : "border-orange-300 bg-white text-orange-700 hover:bg-orange-50"}`}
+                    >
+                        {optionSelected && <Check size={18} strokeWidth={3} />}
+                        {optionSelected ? t("selected") : t("select_option")}
+                    </button>
+                )}
+
             </div>
 
             {/* Empty */}
@@ -132,7 +149,7 @@ function FoodGroup({
 
                     <ChefHat
                         size={46}
-                        className="mb-4 text-blue-300"
+                        className="mb-4 text-orange-300"
                     />
 
                     <h3 className="text-lg sm:text-xl font-semibold text-gray-700">
@@ -143,6 +160,39 @@ function FoodGroup({
                         {t("wait_admin_update")}
                     </p>
 
+                </div>
+
+            ) : readOnly ? (
+
+                <div className="flex flex-wrap justify-center gap-4">
+                    {foods.map((food, index) => {
+                        const name = typeof food === "string" ? food : food.name || "";
+                        const nameEn = typeof food === "string" ? "" : food.nameEn || "";
+                        const image = typeof food === "string" ? "" : food.image || "";
+                        const subtitle = typeof food === "string" ? "" : food.subtitle || "";
+                        const displayName = i18n.language === "en" ? nameEn || name : name;
+
+                        return (
+                            <article
+                                key={food._id || `${name}-${index}`}
+                                className="flex w-[calc(50%-0.5rem)] min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-2.5 text-center shadow-sm sm:w-[190px]"
+                            >
+                                <div className="aspect-square w-full shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                                    <img
+                                        src={image || "https://placehold.co/600"}
+                                        alt={displayName}
+                                        loading="lazy"
+                                        decoding="async"
+                                        className="h-full w-full object-cover"
+                                    />
+                                </div>
+                                <div className="flex min-h-16 min-w-0 flex-col items-center justify-center px-1 pt-3">
+                                    <h3 className="w-full break-words text-base font-semibold leading-snug text-slate-800">{displayName}</h3>
+                                    {subtitle && <p className="mt-1 text-sm leading-tight text-slate-500">{subtitle}</p>}
+                                </div>
+                            </article>
+                        );
+                    })}
                 </div>
 
             ) : useDrinkCard ? (
