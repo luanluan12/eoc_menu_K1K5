@@ -9,8 +9,23 @@ import {
 } from "lucide-react";
 import { getReviews } from "../../api/orderApi";
 
+function getCurrentIsoWeek() {
+  const today = new Date();
+  const date = new Date(
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+  );
+  const dayNumber = date.getUTCDay() || 7;
+
+  date.setUTCDate(date.getUTCDate() + 4 - dayNumber);
+
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+
+  return `${date.getUTCFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+}
+
 function ReviewManagement() {
-  const [week, setWeek] = useState("");
+  const [week, setWeek] = useState(getCurrentIsoWeek);
   const [loading, setLoading] = useState(true);
   const [reviews, setReviews] = useState([]);
   const [selectedImage, setSelectedImage] = useState(null);
