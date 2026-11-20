@@ -263,9 +263,10 @@ exports.getMenus = async (req, res) => {
  */
 exports.getWeekMenu = async (req, res) => {
   try {
-    const menu = await Menu.findOne({
-      status: "published",
-    })
+    const filter = { status: "published" };
+    if (req.query.week) filter.week = req.query.week;
+
+    const menu = await Menu.findOne(filter)
       .sort({ createdAt: -1 })
       .lean();
 

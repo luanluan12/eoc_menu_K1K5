@@ -16,6 +16,21 @@ import { createOrder, updateOrder } from "../../api/orderApi";
 
 import { verifyInvite } from "../../api/orderApi";
 
+function getCurrentIsoWeek() {
+  const today = new Date();
+  const date = new Date(
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+  );
+  const dayNumber = date.getUTCDay() || 7;
+
+  date.setUTCDate(date.getUTCDate() + 4 - dayNumber);
+
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+
+  return `${date.getUTCFullYear()}-W${String(weekNumber).padStart(2, "0")}`;
+}
+
 function WeekMenu() {
   const [loading, setLoading] = useState(true);
 
@@ -43,7 +58,8 @@ function WeekMenu() {
         return;
       }
 
-      const menuRes = await getWeekMenu();
+      // Chọn menu đã publish đúng tuần hiện tại, không lấy menu tuần sau mới publish nhất.
+      const menuRes = await getWeekMenu(getCurrentIsoWeek());
 
       setMenu(menuRes.data.data);
     } catch (err) {
