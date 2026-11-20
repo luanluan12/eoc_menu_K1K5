@@ -32,10 +32,7 @@ function WeekMenuContent({
     return order.mains.length > 0 || !!order.drink || !!order.soup;
   };
 
-  // Tạm bỏ validate ngày khóa để test đặt món cho tuần hiện tại.
-  // Khôi phục sau khi test xong:
-  // const isDayClosed = Boolean(menu?.days?.[currentDay]?.orderingClosed);
-  const isDayClosed = false;
+  const isDayClosed = Boolean(menu?.days?.[currentDay]?.orderingClosed);
 
   // =========================
   // Init Order
@@ -398,8 +395,7 @@ function WeekMenuContent({
     );
   }
 
-  // const expired = new Date() > new Date(menu.deadline);
-  const expired = false;
+  const expired = new Date() > new Date(menu.deadline);
 
   return (
     <div className="mx-auto w-full max-w-[1080px] px-4 py-5 sm:px-6 lg:px-10 lg:py-8">

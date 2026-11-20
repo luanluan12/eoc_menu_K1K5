@@ -80,9 +80,8 @@ function WeekMenuEditor({
 
     const now = new Date();
 
-    // Tạm dùng tuần hiện tại để test tạo menu và đặt món.
-    // Khôi phục dòng dưới đây sau khi test xong để quay lại tạo menu tuần sau.
-    // now.setDate(now.getDate() + 7);
+    // Luôn tạo menu cho tuần sau
+    now.setDate(now.getDate() + 7);
 
     const getISOWeek = (date) => {
       const d = new Date(

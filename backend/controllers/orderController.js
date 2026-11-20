@@ -22,13 +22,11 @@ const {
 // ===========================================
 
 const canOrder = (menu) => {
-  // Tạm bỏ kiểm tra deadline để test đặt món cho tuần hiện tại.
-  // Khôi phục đoạn cũ sau khi test xong:
-  // const now = moment().tz("Asia/Ho_Chi_Minh");
-  // return menu?.status === "published"
-  //   && now.isSameOrBefore(moment(menu.deadline));
-  // Giữ menu published là điều kiện bắt buộc để khách chỉ đặt menu đã gửi.
-  return menu?.status === "published";
+  const now = moment().tz("Asia/Ho_Chi_Minh");
+  // `published` là dấu hiệu menu đã được admin gửi. Không dùng openTime để
+  // chặn vì các menu đã publish trước khi áp dụng logic mới vẫn giữ openTime cũ.
+  return menu?.status === "published"
+    && now.isSameOrBefore(moment(menu.deadline));
 };
 
 const hasSelectedMeal = (days = []) =>
@@ -92,11 +90,9 @@ const buildOrderDays = (menu, days) => {
 
     const hasSoup = !!soup;
 
-    // Tạm bỏ validate ngày khóa để test đặt món cho tuần hiện tại.
-    // Khôi phục sau khi test xong:
-    // if (menuDay.orderingClosed && (hasMain || hasDrink || hasSoup)) {
-    //   throw new Error(`Ngày ${i + 1} đã đóng đặt món.`);
-    // }
+    if (menuDay.orderingClosed && (hasMain || hasDrink || hasSoup)) {
+      throw new Error(`Ngày ${i + 1} đã đóng đặt món.`);
+    }
 
     const hasFlexibleSelections = mains.some((item) => item.mealPeriod);
     const totalGroup = Number(hasMain) + Number(hasDrink) + Number(hasSoup);
@@ -538,14 +534,13 @@ exports.updateOrder = async (req, res) => {
 
     const menu = await Menu.findById(order.menu);
 
-    // Tạm bỏ validate deadline chỉnh sửa để test tuần hiện tại.
-    // Khôi phục sau khi test xong:
-    // if (new Date() > new Date(menu.deadline)) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Đã hết thời gian chỉnh sửa.",
-    //   });
-    // }
+    if (new Date() > new Date(menu.deadline)) {
+      return res.status(400).json({
+        success: false,
+
+        message: "Đã hết thời gian chỉnh sửa.",
+      });
+    }
 
     if (!menu) {
       return res.status(404).json({
