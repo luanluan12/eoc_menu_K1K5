@@ -212,7 +212,6 @@ function Report() {
 function TabButton({ active, color, onClick, children }) {
   const activeClass = {
     blue: "border-blue-600 bg-white text-blue-600",
-    blue: "border-blue-600 bg-white text-blue-600",
     red: "border-red-600 bg-white text-red-600",
   }[color];
 

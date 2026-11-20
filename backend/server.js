@@ -23,11 +23,6 @@ const startResignCron = require("./cron/resignCron");
 
 const app = express();
 
-connectDB();
-
-startReminderCron();
-startResignCron();
-
 app.use(cors());
 
 app.use(express.json());
@@ -68,8 +63,28 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5001;
+async function startServer() {
+  try {
+    const configuredPort = process.env.PORT?.trim();
+    const PORT = configuredPort ? Number(configuredPort) : 5001;
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running at http://0.0.0.0:${PORT}`);
-});
+    if (!Number.isInteger(PORT) || PORT < 1 || PORT > 65535) {
+      throw new Error(`Invalid PORT value: ${process.env.PORT}`);
+    }
+
+    // Do not accept API traffic or run database jobs before MongoDB is ready.
+    await connectDB();
+
+    startReminderCron();
+    startResignCron();
+
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running at http://0.0.0.0:${PORT}`);
+    });
+  } catch (err) {
+    console.error("Server startup failed:", err);
+    process.exit(1);
+  }
+}
+
+startServer();

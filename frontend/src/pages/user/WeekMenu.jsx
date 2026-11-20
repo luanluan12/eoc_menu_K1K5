@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 
 import { createOrder, updateOrder } from "../../api/orderApi";
 
-import { verifyInvite, createOrderFromInvite } from "../../api/orderApi";
+import { verifyInvite } from "../../api/orderApi";
 
 function WeekMenu() {
   const [loading, setLoading] = useState(true);
@@ -55,8 +55,6 @@ function WeekMenu() {
 
   const submit = async (days) => {
     try {
-      console.log("A");
-
       if (order) {
         await updateOrder(order._id, {
           days,
@@ -68,20 +66,12 @@ function WeekMenu() {
         });
       }
 
-      console.log("B");
-
       toast.success("Đặt món thành công.");
-
-      console.log("C");
 
       await loadData();
 
-      console.log("D");
-
       return true;
     } catch (err) {
-      console.log("ERROR", err);
-
       toast.error(err.response?.data?.message || "Có lỗi xảy ra.");
 
       return false;
