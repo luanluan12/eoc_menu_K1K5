@@ -3,33 +3,34 @@ const PERIODS = ["lunch", "dinner"];
 const CATEGORIES = ["rice", "vegetarian", "noodles", "soup"];
 const translationCache = new Map();
 
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 async function translateText(text) {
-  if (translationCache.has(text)) return translationCache.get(text);
+  const normalizedText = text.trim();
+  if (translationCache.has(normalizedText)) return translationCache.get(normalizedText);
 
-  const bytes = new TextEncoder().encode(text).length;
-  if (bytes > 500) {
-    const error = new Error("Tên món quá dài để dịch miễn phí (giới hạn 500 byte mỗi tên).");
+  if (Buffer.byteLength(normalizedText, "utf8") > 500) {
+    const error = new Error("Tên món quá dài để dịch bằng MyMemory (tối đa 500 byte mỗi yêu cầu).");
     error.statusCode = 400;
     throw error;
   }
 
   const url = new URL("https://api.mymemory.translated.net/get");
-  url.searchParams.set("q", text);
+  url.searchParams.set("q", normalizedText);
   url.searchParams.set("langpair", "vi|en");
   url.searchParams.set("mt", "1");
 
+  const contactEmail = process.env.MYMEMORY_EMAIL?.trim();
+  if (contactEmail) url.searchParams.set("de", contactEmail);
+
   const response = await fetch(url, { headers: { Accept: "application/json" } });
-  const result = await response.json();
+  const result = await response.json().catch(() => ({}));
   const translatedText = result.responseData?.translatedText?.trim();
   if (!response.ok || result.responseStatus !== 200 || !translatedText) {
-    const error = new Error(result.responseDetails || "Dịch vụ dịch miễn phí đang bận hoặc đã hết hạn mức 5.000 ký tự/ngày.");
-    error.statusCode = 503;
+    const error = new Error(result.responseDetails || "MyMemory đang bận hoặc đã hết hạn mức dịch miễn phí.");
+    error.statusCode = response.status === 429 ? 429 : 503;
     throw error;
   }
 
-  translationCache.set(text, translatedText);
+  translationCache.set(normalizedText, translatedText);
   return translatedText;
 }
 
@@ -59,11 +60,10 @@ async function translateMenuDays(days, previousDays = []) {
     }
   });
 
-  const uniqueNames = [...new Set(targets.map((dish) => dish.name.trim()))];
   const translatedNames = new Map();
-  for (const [index, name] of uniqueNames.entries()) {
-    if (index > 0) await pause(350);
-    translatedNames.set(name, await translateText(name));
+  for (const dish of targets) {
+    const name = dish.name.trim();
+    if (!translatedNames.has(name)) translatedNames.set(name, await translateText(name));
   }
 
   targets.forEach((dish) => {
