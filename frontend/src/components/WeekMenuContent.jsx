@@ -278,10 +278,11 @@ function WeekMenuContent({
               </div>
 
               {availableCategories.length ? (
-                <div className="grid gap-3 sm:grid-cols-[230px_minmax(0,1fr)] sm:gap-4">
-                  <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 scrollbar-hide sm:flex-col sm:justify-center sm:overflow-visible sm:pb-0">
-                    {availableCategories.map((category) => {
+                <div className="grid gap-3 sm:grid-cols-[230px_minmax(0,1fr)] sm:items-stretch sm:gap-4">
+                  <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 scrollbar-hide sm:flex-col sm:justify-start sm:overflow-visible sm:pb-0">
+                    {MEAL_CATEGORIES.map((category) => {
                       const Icon = CATEGORY_ICONS[category];
+                      const categoryAvailable = availableCategories.includes(category);
                       const selected = selectedCategory === category;
                       const viewing = displayCategory === category;
                       return (
@@ -289,13 +290,13 @@ function WeekMenuContent({
                           key={category}
                           type="button"
                           aria-pressed={selected}
-                          disabled={isReadonly || !editable || isDayClosed}
+                          disabled={isReadonly || !editable || isDayClosed || !categoryAvailable}
                           onClick={() => selectOption(period, category)}
-                          className={`flex min-h-12 min-w-[160px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition sm:min-h-12 sm:min-w-0 sm:shrink sm:text-xs ${selected ? "border-orange-500 bg-orange-500 text-white shadow-sm" : viewing ? "border-orange-300 bg-orange-50 text-slate-800" : "border-orange-100 bg-white/85 text-slate-700 hover:border-orange-300 hover:bg-orange-50 disabled:cursor-default"}`}
+                          className={`flex min-h-12 min-w-[160px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition sm:min-h-12 sm:w-full sm:min-w-0 sm:shrink sm:text-xs ${!categoryAvailable ? "cursor-not-allowed border-slate-100 bg-slate-50/80 text-slate-300" : selected ? "border-orange-500 bg-orange-500 text-white shadow-sm" : viewing ? "border-orange-300 bg-orange-50 text-slate-800" : "border-orange-100 bg-white/85 text-slate-700 hover:border-orange-300 hover:bg-orange-50"}`}
                         >
-                          <Icon size={18} className={`shrink-0 ${selected ? "text-white" : "text-orange-600"}`} />
+                          <Icon size={18} className={`shrink-0 ${!categoryAvailable ? "text-slate-300" : selected ? "text-white" : "text-orange-600"}`} />
                           <span className="min-w-0 flex-1 whitespace-nowrap">{t(`meal_${category}`)}</span>
-                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${selected ? "border-white bg-white text-orange-600" : "border-slate-300 bg-white text-white"}`} aria-hidden="true">
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${selected ? "border-white bg-white text-orange-600" : categoryAvailable ? "border-slate-300 bg-white text-white" : "border-slate-200 bg-slate-50 text-white"}`} aria-hidden="true">
                             {selected && <Check size={14} strokeWidth={3} />}
                           </span>
                         </button>
@@ -304,25 +305,47 @@ function WeekMenuContent({
                   </div>
 
                   {displayCategory ? (
-                    <div className="flex flex-wrap justify-center gap-2.5">
-                      {selectedFoods.map((food, index) => {
-                        const name = typeof food === "string" ? food : food.name || "";
-                        const nameEn = typeof food === "string" ? "" : food.nameEn || "";
-                        const subtitle = typeof food === "string" ? "" : food.subtitle || "";
-                        const displayName = i18n.language === "en" ? nameEn || name : name;
-                        return (
-                          <article key={food._id || `${name}-${index}`} className="flex min-h-[220px] w-[calc(50%-0.3125rem)] max-w-[190px] flex-col rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:min-h-[260px] sm:p-3">
-                            <div className="aspect-square w-full shrink-0 overflow-hidden rounded-xl bg-orange-50">
-                              <img src={food.image || "https://placehold.co/600"} alt={displayName} loading="lazy" decoding="async" className="h-full w-full rounded-xl object-cover" />
-                            </div>
-                            <div className="flex min-h-[60px] flex-1 flex-col items-center justify-center px-1 py-2 text-center">
-                              <h3 className="line-clamp-2 text-xs font-semibold leading-snug text-slate-800 sm:text-sm">{displayName}</h3>
-                              {subtitle && <p className="mt-1 line-clamp-1 text-[10px] text-slate-500 sm:text-xs">{subtitle}</p>}
-                            </div>
-                          </article>
-                        );
-                      })}
-                    </div>
+                    selectedFoods.length === 1 ? (
+                      <div className="flex justify-center sm:justify-center">
+                        {selectedFoods.map((food, index) => {
+                          const name = typeof food === "string" ? food : food.name || "";
+                          const nameEn = typeof food === "string" ? "" : food.nameEn || "";
+                          const subtitle = typeof food === "string" ? "" : food.subtitle || "";
+                          const displayName = i18n.language === "en" ? nameEn || name : name;
+                          return (
+                            <article key={food._id || `${name}-${index}`} className="flex min-h-32 w-full max-w-[440px] items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:h-[200px] sm:min-h-0 sm:gap-5 sm:p-4">
+                              <div className="h-24 w-24 shrink-0 overflow-hidden rounded-xl bg-orange-50 sm:h-32 sm:w-32">
+                                <img src={food.image || "https://placehold.co/600"} alt={displayName} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+                              </div>
+                              <div className="w-40 min-w-0 shrink-0 py-2 text-center sm:w-48">
+                                <h3 className="break-words text-base font-semibold leading-snug text-slate-800 sm:text-lg">{displayName}</h3>
+                                {subtitle && <p className="mt-1 line-clamp-2 text-sm text-slate-500 sm:text-base">{subtitle}</p>}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="flex w-full items-start justify-start gap-2.5 overflow-x-auto overscroll-x-contain pb-2 scrollbar-hide sm:h-full sm:gap-3">
+                        {selectedFoods.map((food, index) => {
+                          const name = typeof food === "string" ? food : food.name || "";
+                          const nameEn = typeof food === "string" ? "" : food.nameEn || "";
+                          const subtitle = typeof food === "string" ? "" : food.subtitle || "";
+                          const displayName = i18n.language === "en" ? nameEn || name : name;
+                          return (
+                            <article key={food._id || `${name}-${index}`} className="flex min-h-[220px] w-[150px] shrink-0 flex-col rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:h-full sm:min-h-0 sm:p-2">
+                              <div className="aspect-square w-full shrink-0 overflow-hidden rounded-xl bg-orange-50">
+                                <img src={food.image || "https://placehold.co/600"} alt={displayName} loading="lazy" decoding="async" className="h-full w-full rounded-xl object-cover" />
+                              </div>
+                              <div className="flex min-h-[60px] flex-1 flex-col items-center justify-center px-1 py-2 text-center">
+                                <h3 className="line-clamp-2 text-xs font-semibold leading-snug text-slate-800 sm:text-sm">{displayName}</h3>
+                                {subtitle && <p className="mt-1 line-clamp-1 text-[10px] text-slate-500 sm:text-xs">{subtitle}</p>}
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    )
                   ) : null}
                 </div>
               ) : (
