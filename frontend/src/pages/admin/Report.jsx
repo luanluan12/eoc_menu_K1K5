@@ -247,12 +247,20 @@ function DailyPeriodReport({ report, period }) {
     headers.some((header) => Number(row.items[header.key || header.name]) > 0),
   );
   const periodLabel = period === "lunch" ? "Buổi trưa" : "Buổi chiều";
+  const guestTypeLabel = (guestType) =>
+    guestType === "employee" ? "Nhân viên" : guestType === "expert" ? "Chuyên gia" : "Chưa cập nhật";
   const optionLabels = [
     ["rice", "Món cơm"],
     ["vegetarian", "Món chay"],
     ["noodles", "Món nước"],
     ["soup", "Món soup"],
   ];
+  const getSelectionLabel = (category) =>
+    optionLabels.find(([key]) => key === category)?.[1] || "Không chọn";
+  const totalSelectedParts = optionLabels.reduce(
+    (total, [key]) => total + Number(report.optionTotals?.[period]?.[key] || 0),
+    0,
+  );
 
   if (headers.length === 0) {
     return (
@@ -269,15 +277,38 @@ function DailyPeriodReport({ report, period }) {
       <div className="space-y-8">
       <section>
         <div className="mb-4">
-          <h2 className="text-lg font-bold text-slate-800">Lựa chọn của nhân viên</h2>
-          <p className="mt-1 text-sm text-slate-500">Số người đã chọn từng nhóm món cho {periodLabel.toLowerCase()}.</p>
+          <h2 className="text-lg font-bold text-slate-800">Số phần theo nhóm món</h2>
+          <p className="mt-1 text-sm text-slate-500">Mỗi người chọn một nhóm món; thống kê tổng số phần theo nhóm cho {periodLabel.toLowerCase()}.</p>
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <div className="rounded-2xl border border-orange-200 bg-orange-100 p-4">
+            <p className="text-sm font-semibold text-orange-800">Tổng số phần</p>
+            <strong className="mt-2 block text-2xl text-orange-900">{totalSelectedParts}</strong>
+            <span className="text-xs text-orange-800">{periodLabel}</span>
+          </div>
           {optionLabels.map(([key, label]) => (
             <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-sm font-semibold text-slate-500">{label}</p>
               <strong className="mt-2 block text-2xl text-slate-900">{report.optionTotals?.[period]?.[key] || 0}</strong>
-              <span className="text-xs text-slate-500">người chọn</span>
+              <span className="text-xs text-slate-500">phần</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {[["employee", "Nhân viên"], ["expert", "Chuyên gia"]].map(([type, label]) => (
+            <div key={type} className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+              <p className="mb-3 font-bold text-slate-800">{label}</p>
+              <p className="mb-3 text-sm text-slate-600">
+                Tổng: <strong className="text-slate-900">{optionLabels.reduce((total, [key]) => total + Number(report.optionTotalsByGuestType?.[type]?.[period]?.[key] || 0), 0)}</strong> phần
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {optionLabels.map(([key, categoryLabel]) => (
+                  <div key={key} className="flex justify-between gap-2 text-slate-600">
+                    <span>{categoryLabel}</span>
+                    <strong className="text-slate-900">{report.optionTotalsByGuestType?.[type]?.[period]?.[key] || 0}</strong>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -411,7 +442,7 @@ function DailyPeriodReport({ report, period }) {
         <SectionHeader
           icon={<BarChart3 size={20} className="text-blue-600" />}
           title="Danh sách nhân viên"
-          description="Chi tiết suất ăn của từng nhân viên"
+          description="Tên, bếp, loại Guest, công ty và suất ăn từng nhân viên"
           badge={`${rows.length} nhân viên`}
           badgeClass="bg-blue-50 text-blue-700"
         />
@@ -421,8 +452,12 @@ function DailyPeriodReport({ report, period }) {
             <thead className="sticky top-0 z-10 bg-slate-100">
               <tr>
                 <TableHeader>Mã NV</TableHeader>
+                <TableHeader>Tên nhân viên</TableHeader>
                 <TableHeader>Email</TableHeader>
                 <TableHeader align="center">Bếp</TableHeader>
+                <TableHeader align="center">Loại Guest</TableHeader>
+                <TableHeader align="center">Công ty</TableHeader>
+                <TableHeader align="center">Nhóm món đã chọn</TableHeader>
 
                 {headers.map((header) => (
                   <TableHeader key={header.key || header.id} align="center">
@@ -442,10 +477,26 @@ function DailyPeriodReport({ report, period }) {
                     {row.employeeId}
                   </td>
 
+                  <td className="px-4 py-3 font-medium text-slate-800">{row.name}</td>
+
                   <td className="px-4 py-3 text-slate-600">{row.email}</td>
 
                   <td className="px-4 py-3 text-center">
                     <KitchenBadge kitchen={row.kitchen} />
+                  </td>
+
+                  <td className="px-4 py-3 text-center">{guestTypeLabel(row.guestType)}</td>
+
+                  <td className="px-4 py-3 text-center">
+                    <span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+                      {row.company || "Chưa cập nhật"}
+                    </span>
+                  </td>
+
+                  <td className="px-4 py-3 text-center">
+                    <span className="rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-800">
+                      {getSelectionLabel(row.selections?.[period])}
+                    </span>
                   </td>
 
                   {headers.map((header) => (
@@ -472,16 +523,36 @@ function DailyPeriodReport({ report, period }) {
             >
               <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4">
                 <div className="min-w-0">
-                  <h3 className="text-base font-bold text-slate-800">
-                    {row.employeeId}
-                  </h3>
+                  <h3 className="text-base font-bold text-slate-800">{row.name}</h3>
+
+                  <p className="mt-1 text-xs font-medium text-slate-500">Mã NV: {row.employeeId}</p>
 
                   <p className="mt-1 break-all text-xs text-slate-500">
                     {row.email}
                   </p>
                 </div>
 
-                <KitchenBadge kitchen={row.kitchen} />
+                <span className="shrink-0 rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+                  {row.company || "Chưa cập nhật"}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 border-b border-slate-100 px-5 py-4 text-sm">
+                <div>
+                  <p className="text-xs text-slate-500">Bếp</p>
+                  <KitchenBadge kitchen={row.kitchen} />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500">Loại Guest</p>
+                  <p className="mt-1 font-semibold text-slate-700">{guestTypeLabel(row.guestType)}</p>
+                </div>
+              </div>
+
+              <div className="border-b border-slate-100 px-5 py-4 text-sm">
+                <p className="text-xs text-slate-500">Nhóm món đã chọn · {periodLabel}</p>
+                <span className="mt-1 inline-flex rounded-full bg-orange-100 px-3 py-1 font-semibold text-orange-800">
+                  {getSelectionLabel(row.selections?.[period])}
+                </span>
               </div>
 
               <div className="grid grid-cols-2 gap-3 p-4 sm:p-5">
@@ -505,6 +576,19 @@ function DailyPeriodReport({ report, period }) {
 function LeftoverReport({ leftover }) {
   return (
     <div className="space-y-10">
+      <section className="grid gap-3 sm:grid-cols-2">
+        {[["employee", "Nhân viên"], ["expert", "Chuyên gia"]].map(([type, label]) => {
+          const summary = leftover.guestTypeSummary?.[type] || {};
+          return (
+            <div key={type} className="rounded-2xl border border-orange-100 bg-orange-50 p-4">
+              <p className="font-bold text-slate-800">{label}</p>
+              <p className="mt-1 text-sm text-slate-600">
+                Chưa nhận: {summary.users || 0} người · Trưa: {summary.lunchUsers || 0} · Chiều: {summary.dinnerUsers || 0}
+              </p>
+            </div>
+          );
+        })}
+      </section>
       {["lunch", "dinner"].map((period) => (
         <LeftoverPeriodReport key={period} leftover={leftover} period={period} />
       ))}
@@ -514,6 +598,7 @@ function LeftoverReport({ leftover }) {
 
 function LeftoverPeriodReport({ leftover, period }) {
   const periodLabel = period === "lunch" ? "Buổi trưa" : "Buổi chiều";
+  const guestTypeLabel = (type) => type === "expert" ? "Chuyên gia" : "Nhân viên";
   const periodLeftovers = leftover.leftovers.filter(
     (item) => (item.mealPeriod || "lunch") === period,
   );
@@ -678,6 +763,8 @@ function LeftoverPeriodReport({ leftover, period }) {
                   <TableHeader>Mã NV</TableHeader>
                   <TableHeader>Tên</TableHeader>
                   <TableHeader align="center">Bếp</TableHeader>
+                  <TableHeader align="center">Loại Guest</TableHeader>
+                  <TableHeader align="center">Công ty</TableHeader>
                   <TableHeader>Đã đặt món</TableHeader>
                 </tr>
               </thead>
@@ -685,7 +772,7 @@ function LeftoverPeriodReport({ leftover, period }) {
               <tbody>
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="py-8 text-center text-gray-400">
+                    <td colSpan={6} className="py-8 text-center text-gray-400">
                       Không có nhân viên chưa nhận.
                     </td>
                   </tr>
@@ -699,6 +786,8 @@ function LeftoverPeriodReport({ leftover, period }) {
                       <td className="px-4 py-3 text-center">
                         <KitchenBadge kitchen={user.kitchen} />
                       </td>
+                      <td className="px-4 py-3 text-center">{guestTypeLabel(user.guestType)}</td>
+                      <td className="px-4 py-3 text-center">{user.company || "Chưa cập nhật"}</td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
                           {user.foodsByPeriod[period].map((food, foodIndex) => (
@@ -730,6 +819,9 @@ function LeftoverPeriodReport({ leftover, period }) {
                     </h3>
                     <p className="truncate text-sm text-slate-500">
                       {user.employeeId}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {guestTypeLabel(user.guestType)} · {user.company || "Chưa cập nhật"}
                     </p>
                   </div>
 

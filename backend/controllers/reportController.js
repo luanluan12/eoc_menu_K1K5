@@ -10,7 +10,8 @@ const { getUnreceivedMeals } = require("../utils/mealCheckin");
 // Helpers
 // ======================================================
 
-function getCompany(email = "") {
+function getCompany(email = "", company = "") {
+  if (company === "BVN" || company === "BMS") return company;
   const e = email.toLowerCase();
 
   if (e.endsWith("@nexonnetworks.com")) {
@@ -26,6 +27,14 @@ function getCompany(email = "") {
   }
 
   return "Khác";
+}
+
+function normalizeGuestType(value) {
+  return value === "expert" ? "expert" : "employee";
+}
+
+function getGuestTypeLabel(value) {
+  return normalizeGuestType(value) === "expert" ? "Chuyên gia" : "Nhân viên";
 }
 
 function sortKitchenValues(a, b) {
@@ -109,6 +118,31 @@ function getMenuReportHeaders(day) {
       type: "soup", id: String(dish._id), name: dish.name, mealPeriod: "lunch", category: "soup",
     })),
   ];
+}
+
+function getMenuDaysForDate(menus, targetDate) {
+  return menus.flatMap((menu) => {
+    const day = menu.days.find(
+      (item) => moment(item.date).tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD") === targetDate,
+    );
+    return day ? [{ menu, day }] : [];
+  });
+}
+
+function getMenuReportHeadersForDays(menuDays) {
+  const headers = [];
+  const seen = new Set();
+
+  for (const { day } of menuDays) {
+    for (const header of getMenuReportHeaders(day)) {
+      const id = `${header.type}:${header.id}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      headers.push(header);
+    }
+  }
+
+  return headers;
 }
 
 function addReportHeaderKeys(headers) {
@@ -213,6 +247,16 @@ function getSelectedOptionForPeriod(day, period) {
   return selectedDish.vegetarian ? "vegetarian" : "rice";
 }
 
+function getMealOptionLabel(day, period) {
+  const labels = {
+    rice: "Món cơm",
+    vegetarian: "Món chay",
+    noodles: "Món nước",
+    soup: "Món soup",
+  };
+  return labels[getSelectedOptionForPeriod(day, period)] || "";
+}
+
 // ======================================================
 // Export Daily Excel
 // ======================================================
@@ -235,25 +279,8 @@ exports.exportDailyExcel = async (req, res) => {
 
     const menus = await Menu.find();
 
-    let selectedMenu = null;
-
-    let selectedDay = null;
-
-    for (const menu of menus) {
-      const day = menu.days.find(
-        (item) =>
-          moment(item.date).tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD") ===
-          targetDate,
-      );
-
-      if (day) {
-        selectedMenu = menu;
-
-        selectedDay = day;
-
-        break;
-      }
-    }
+    const menuDays = getMenuDaysForDate(menus, targetDate);
+    const selectedMenu = menuDays[0]?.menu;
 
     if (!selectedMenu) {
       return res.status(404).json({
@@ -265,7 +292,7 @@ exports.exportDailyExcel = async (req, res) => {
     // Danh sách món của đúng ngày
     // ==================================================
 
-    const headers = getMenuReportHeaders(selectedDay);
+    const headers = getMenuReportHeadersForDays(menuDays);
     addReportHeaderKeys(headers);
 
     // ==================================================
@@ -282,7 +309,7 @@ exports.exportDailyExcel = async (req, res) => {
     const orders = await Order.find(orderFilter)
       .populate({
         path: "user",
-        select: "employeeId name email kitchen",
+        select: "employeeId name email kitchen guestType company",
       })
       .sort({
         "user.employeeId": 1,
@@ -312,6 +339,18 @@ exports.exportDailyExcel = async (req, res) => {
 
     const kitchenSummary = {};
 
+    const optionCategories = ["rice", "vegetarian", "noodles", "soup"];
+    const optionTotals = {
+      lunch: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+      dinner: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+    };
+    const optionTotalsByGuestType = Object.fromEntries(
+      ["employee", "expert"].map((guestType) => [guestType, {
+        lunch: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+        dinner: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+      }]),
+    );
+
     headers.forEach((item) => {
       totalSummary[item.key] = 0;
     });
@@ -324,7 +363,7 @@ exports.exportDailyExcel = async (req, res) => {
     // TITLE
     // ==================================================
 
-    const lastColumn = headers.length + 3;
+    const lastColumn = headers.length + 8;
 
     sheet.mergeCells(1, 1, 1, lastColumn);
 
@@ -355,11 +394,21 @@ exports.exportDailyExcel = async (req, res) => {
 
     sheet.getCell(rowIndex, 1).value = "Employee ID";
 
-    sheet.getCell(rowIndex, 2).value = "Email";
+    sheet.getCell(rowIndex, 2).value = "Tên nhân viên";
 
-    sheet.getCell(rowIndex, 3).value = "Kitchen";
+    sheet.getCell(rowIndex, 3).value = "Email";
 
-    let column = 4;
+    sheet.getCell(rowIndex, 4).value = "Bếp";
+
+    sheet.getCell(rowIndex, 5).value = "Loại Guest";
+
+    sheet.getCell(rowIndex, 6).value = "Công ty";
+
+    sheet.getCell(rowIndex, 7).value = "Nhóm món trưa";
+
+    sheet.getCell(rowIndex, 8).value = "Nhóm món chiều";
+
+    let column = 9;
 
     headers.forEach((item) => {
       sheet.getCell(rowIndex, column).value = getExcelReportHeaderLabel(item);
@@ -421,11 +470,21 @@ exports.exportDailyExcel = async (req, res) => {
 
     sheet.getColumn(1).width = 18;
 
-    sheet.getColumn(2).width = 36;
+    sheet.getColumn(2).width = 26;
 
-    sheet.getColumn(3).width = 10;
+    sheet.getColumn(3).width = 36;
 
-    for (let i = 4; i <= lastColumn; i++) {
+    sheet.getColumn(4).width = 10;
+
+    sheet.getColumn(5).width = 18;
+
+    sheet.getColumn(6).width = 14;
+
+    sheet.getColumn(7).width = 18;
+
+    sheet.getColumn(8).width = 18;
+
+    for (let i = 9; i <= lastColumn; i++) {
       sheet.getColumn(i).width = 18;
     }
 
@@ -451,11 +510,32 @@ exports.exportDailyExcel = async (req, res) => {
         (day.mains || []).some((item) => item.quantity > 0) || day.drink || day.soup;
       if (!hasFood) continue;
 
+      for (const period of ["lunch", "dinner"]) {
+        if (!hasOrderedMealForPeriod(day, period)) continue;
+        const category = getSelectedOptionForPeriod(day, period);
+        if (category && Object.hasOwn(optionTotals[period], category)) {
+          optionTotals[period][category] += 1;
+          optionTotalsByGuestType[normalizeGuestType(order.user.guestType)][period][category] += 1;
+        }
+      }
+
       sheet.getCell(rowIndex, 1).value = order.user.employeeId;
 
-      sheet.getCell(rowIndex, 2).value = order.user.email;
+      sheet.getCell(rowIndex, 2).value = order.user.name;
 
-      sheet.getCell(rowIndex, 3).value = order.user.kitchen;
+      sheet.getCell(rowIndex, 3).value = order.user.email;
+
+      sheet.getCell(rowIndex, 4).value = order.user.kitchen;
+
+      sheet.getCell(rowIndex, 5).value = order.user.guestType === "employee"
+        ? "Nhân viên"
+        : order.user.guestType === "expert" ? "Chuyên gia" : "Chưa cập nhật";
+
+      sheet.getCell(rowIndex, 6).value = order.user.company || "Chưa cập nhật";
+
+      sheet.getCell(rowIndex, 7).value = getMealOptionLabel(day, "lunch");
+
+      sheet.getCell(rowIndex, 8).value = getMealOptionLabel(day, "dinner");
 
       const kitchen = String(order.user.kitchen);
 
@@ -467,7 +547,7 @@ exports.exportDailyExcel = async (req, res) => {
         });
       }
 
-      column = 4;
+      column = 9;
 
       headers.forEach((item) => {
         let value = "";
@@ -568,7 +648,7 @@ exports.exportDailyExcel = async (req, res) => {
       size: 13,
     };
 
-    let col = 4;
+    let col = 9;
 
     headers.forEach((item) => {
       sheet.getCell(rowIndex, col).value = totalSummary[item.key];
@@ -605,7 +685,7 @@ exports.exportDailyExcel = async (req, res) => {
       .forEach((kitchen) => {
         sheet.getCell(rowIndex, 1).value = `Bếp ${kitchen}`;
 
-        col = 4;
+        col = 9;
 
         headers.forEach((item) => {
           sheet.getCell(rowIndex, col).value = kitchenSummary[kitchen][item.key];
@@ -615,6 +695,76 @@ exports.exportDailyExcel = async (req, res) => {
 
         rowIndex++;
       });
+
+    rowIndex += 2;
+    sheet.getCell(rowIndex, 1).value = "SỐ PHẦN THEO NHÓM MÓN";
+    sheet.getCell(rowIndex, 1).font = { bold: true, size: 14 };
+    rowIndex++;
+
+    const optionLabels = {
+      rice: "Món cơm",
+      vegetarian: "Món chay",
+      noodles: "Món nước",
+      soup: "Món soup",
+    };
+    ["Nhóm món", ...optionCategories.map((category) => optionLabels[category]), "Tổng"].forEach((label, index) => {
+      const cell = sheet.getCell(rowIndex, index + 1);
+      cell.value = label;
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE8CC" } };
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+    });
+    rowIndex++;
+
+    const optionGrandTotals = Object.fromEntries(optionCategories.map((category) => [category, 0]));
+    for (const [period, label] of [["lunch", "Buổi trưa"], ["dinner", "Buổi chiều"]]) {
+      const values = optionCategories.map((category) => optionTotals[period][category]);
+      values.forEach((value, index) => {
+        optionGrandTotals[optionCategories[index]] += value;
+      });
+      const cells = [label, ...values, values.reduce((sum, value) => sum + value, 0)];
+      cells.forEach((value, index) => {
+        const cell = sheet.getCell(rowIndex, index + 1);
+        cell.value = value;
+        cell.alignment = { horizontal: index === 0 ? "left" : "center", vertical: "middle" };
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      });
+      rowIndex++;
+    }
+    ["Tổng", ...optionCategories.map((category) => optionGrandTotals[category]), Object.values(optionGrandTotals).reduce((sum, value) => sum + value, 0)].forEach((value, index) => {
+      const cell = sheet.getCell(rowIndex, index + 1);
+      cell.value = value;
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: index === 0 ? "left" : "center", vertical: "middle" };
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+    });
+
+    rowIndex += 2;
+    sheet.getCell(rowIndex, 1).value = "SỐ PHẦN THEO NHÓM USER";
+    sheet.getCell(rowIndex, 1).font = { bold: true, size: 14 };
+    rowIndex++;
+    ["Loại user", "Buổi", ...optionCategories.map((category) => optionLabels[category]), "Tổng"].forEach((value, index) => {
+      const cell = sheet.getCell(rowIndex, index + 1);
+      cell.value = value;
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFFE8CC" } };
+      cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+    });
+    rowIndex++;
+    for (const [guestType, label] of [["employee", "Nhân viên"], ["expert", "Chuyên gia"]]) {
+      for (const [period, periodLabel] of [["lunch", "Buổi trưa"], ["dinner", "Buổi chiều"]]) {
+        const values = optionCategories.map((category) => optionTotalsByGuestType[guestType][period][category]);
+        [label, periodLabel, ...values, values.reduce((sum, value) => sum + value, 0)].forEach((value, index) => {
+          const cell = sheet.getCell(rowIndex, index + 1);
+          cell.value = value;
+          cell.alignment = { horizontal: index < 2 ? "left" : "center", vertical: "middle" };
+          cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+        });
+        rowIndex++;
+      }
+    }
 
     // ==========================================
     // Download
@@ -667,27 +817,8 @@ exports.getDailyReport = async (req, res) => {
 
     const menus = await Menu.find();
 
-    let selectedMenu = null;
-
-    let selectedDay = null;
-
-    for (const menu of menus) {
-      const day = menu.days.find(
-        (item) =>
-          moment(item.date)
-            .tz("Asia/Ho_Chi_Minh")
-
-            .format("YYYY-MM-DD") === targetDate,
-      );
-
-      if (day) {
-        selectedMenu = menu;
-
-        selectedDay = day;
-
-        break;
-      }
-    }
+    const menuDays = getMenuDaysForDate(menus, targetDate);
+    const selectedMenu = menuDays[0]?.menu;
 
     if (!selectedMenu) {
       return res.status(404).json({
@@ -699,7 +830,7 @@ exports.getDailyReport = async (req, res) => {
     // Header
     // =====================================
 
-    const headers = getMenuReportHeaders(selectedDay);
+    const headers = getMenuReportHeadersForDays(menuDays);
     addReportHeaderKeys(headers);
 
     // =====================================
@@ -714,7 +845,7 @@ exports.getDailyReport = async (req, res) => {
 
     const orders = await Order.find(orderFilter).populate({
       path: "user",
-      select: "employeeId name email kitchen",
+      select: "employeeId name email kitchen guestType company",
     });
     reconcileReportHeaders(headers, orders, targetDate);
     const totals = {};
@@ -726,6 +857,12 @@ exports.getDailyReport = async (req, res) => {
       lunch: Object.fromEntries(optionCategories.map((category) => [category, 0])),
       dinner: Object.fromEntries(optionCategories.map((category) => [category, 0])),
     };
+    const optionTotalsByGuestType = Object.fromEntries(
+      ["employee", "expert"].map((guestType) => [guestType, {
+        lunch: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+        dinner: Object.fromEntries(optionCategories.map((category) => [category, 0])),
+      }]),
+    );
     const kitchenOptionTotals = {};
 
     headers.forEach((h) => {
@@ -773,6 +910,7 @@ exports.getDailyReport = async (req, res) => {
           if (category) {
             optionTotals[period][category] += 1;
             kitchenOptionTotals[kitchen][period][category] += 1;
+            optionTotalsByGuestType[normalizeGuestType(order.user.guestType)][period][category] += 1;
           }
         }
       }
@@ -840,6 +978,10 @@ exports.getDailyReport = async (req, res) => {
 
         kitchen,
 
+        guestType: order.user.guestType || "",
+
+        company: order.user.company || "",
+
         received: day.received,
 
         selections: {
@@ -881,6 +1023,8 @@ exports.getDailyReport = async (req, res) => {
 
         optionTotals,
 
+        optionTotalsByGuestType,
+
         kitchens: kitchenRows,
       },
     });
@@ -911,22 +1055,8 @@ exports.getLeftoverReport = async (req, res) => {
 
     const menus = await Menu.find();
 
-    let selectedMenu = null;
-    let selectedDay = null;
-
-    for (const menu of menus) {
-      const day = menu.days.find(
-        (item) =>
-          moment(item.date).tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD") ===
-          targetDate,
-      );
-
-      if (day) {
-        selectedMenu = menu;
-        selectedDay = day;
-        break;
-      }
-    }
+    const menuDays = getMenuDaysForDate(menus, targetDate);
+    const selectedMenu = menuDays[0]?.menu;
 
     if (!selectedMenu) {
       return res.status(404).json({
@@ -938,7 +1068,7 @@ exports.getLeftoverReport = async (req, res) => {
     // Header
     // =====================================
 
-    const headers = getMenuReportHeaders(selectedDay);
+    const headers = getMenuReportHeadersForDays(menuDays);
     addReportHeaderKeys(headers);
 
     // =====================================
@@ -954,7 +1084,7 @@ exports.getLeftoverReport = async (req, res) => {
 
     const orders = await Order.find(orderFilter).populate({
       path: "user",
-      select: "employeeId name email kitchen",
+      select: "employeeId name email kitchen guestType company",
     });
     reconcileReportHeaders(headers, orders, targetDate);
 
@@ -1032,6 +1162,8 @@ exports.getLeftoverReport = async (req, res) => {
         name: order.user.name,
         email: order.user.email,
         kitchen: order.user.kitchen,
+        guestType: normalizeGuestType(order.user.guestType),
+        company: getCompany(order.user.email, order.user.company),
         foods,
         foodsByPeriod,
       });
@@ -1071,6 +1203,8 @@ exports.getLeftoverReport = async (req, res) => {
           name: order.user.name,
           email: order.user.email,
           kitchen: order.user.kitchen,
+          guestType: normalizeGuestType(order.user.guestType),
+          company: getCompany(order.user.email, order.user.company),
           quantity: main.quantity,
         });
 
@@ -1094,6 +1228,8 @@ exports.getLeftoverReport = async (req, res) => {
             name: order.user.name,
             email: order.user.email,
             kitchen: order.user.kitchen,
+            guestType: normalizeGuestType(order.user.guestType),
+            company: getCompany(order.user.email, order.user.company),
           });
 
           kitchens[kitchen][head.key]++;
@@ -1117,6 +1253,8 @@ exports.getLeftoverReport = async (req, res) => {
             name: order.user.name,
             email: order.user.email,
             kitchen: order.user.kitchen,
+            guestType: normalizeGuestType(order.user.guestType),
+            company: getCompany(order.user.email, order.user.company),
           });
 
           kitchens[kitchen][head.key]++;
@@ -1141,6 +1279,17 @@ exports.getLeftoverReport = async (req, res) => {
         };
       });
 
+    const guestTypeSummary = {
+      employee: { users: 0, lunchUsers: 0, dinnerUsers: 0 },
+      expert: { users: 0, lunchUsers: 0, dinnerUsers: 0 },
+    };
+    for (const user of users) {
+      const group = guestTypeSummary[normalizeGuestType(user.guestType)];
+      group.users += 1;
+      if (user.foodsByPeriod.lunch.length > 0) group.lunchUsers += 1;
+      if (user.foodsByPeriod.dinner.length > 0) group.dinnerUsers += 1;
+    }
+
     // =====================================
     // Response
     // =====================================
@@ -1156,6 +1305,8 @@ exports.getLeftoverReport = async (req, res) => {
         kitchens: kitchenRows,
 
         users,
+
+        guestTypeSummary,
       },
     });
   } catch (err) {
@@ -1206,7 +1357,7 @@ exports.getInvoiceReport = async (req, res) => {
     const orders = await Order.find(orderFilter)
       .populate({
         path: "user",
-        select: "employeeId name email kitchen",
+        select: "employeeId name email kitchen guestType company",
       })
       .sort({
         "user.employeeId": 1,
@@ -1215,6 +1366,7 @@ exports.getInvoiceReport = async (req, res) => {
     const rows = [];
 
     const companySummary = {};
+    const guestTypeSummary = { employee: 0, expert: 0 };
 
     for (const order of orders) {
       if (!order.user) continue;
@@ -1231,9 +1383,12 @@ exports.getInvoiceReport = async (req, res) => {
           continue;
         }
 
-        const company = getCompany(order.user.email);
+        const company = getCompany(order.user.email, order.user.company);
+        const guestType = normalizeGuestType(order.user.guestType);
+        const mealCount = ["lunch", "dinner"].filter((period) => hasOrderedMealForPeriod(day, period)).length;
 
-        companySummary[company] = (companySummary[company] || 0) + 1;
+        companySummary[company] = (companySummary[company] || 0) + mealCount;
+        guestTypeSummary[guestType] += mealCount;
 
         rows.push({
           date: current.format("DD/MM/YYYY"),
@@ -1245,6 +1400,10 @@ exports.getInvoiceReport = async (req, res) => {
           email: order.user.email,
 
           company,
+
+          guestType,
+
+          mealCount,
 
           food,
 
@@ -1285,6 +1444,8 @@ exports.getInvoiceReport = async (req, res) => {
         rows,
 
         summary: companySummary,
+
+        summaryByGuestType: guestTypeSummary,
       },
     });
   } catch (err) {
@@ -1337,7 +1498,7 @@ exports.exportInvoiceExcel = async (req, res) => {
     const orders = await Order.find(orderFilter)
       .populate({
         path: "user",
-        select: "employeeId name email kitchen",
+        select: "employeeId name email kitchen guestType company",
       })
       .sort({
         "user.employeeId": 1,
@@ -1350,6 +1511,7 @@ exports.exportInvoiceExcel = async (req, res) => {
     const rows = [];
 
     const companySummary = {};
+    const guestTypeSummary = { employee: 0, expert: 0 };
 
     for (const order of orders) {
       if (!order.user) continue;
@@ -1366,9 +1528,12 @@ exports.exportInvoiceExcel = async (req, res) => {
           continue;
         }
 
-        const company = getCompany(order.user.email);
+        const company = getCompany(order.user.email, order.user.company);
+        const guestType = normalizeGuestType(order.user.guestType);
+        const mealCount = ["lunch", "dinner"].filter((period) => hasOrderedMealForPeriod(day, period)).length;
 
-        companySummary[company] = (companySummary[company] || 0) + 1;
+        companySummary[company] = (companySummary[company] || 0) + mealCount;
+        guestTypeSummary[guestType] += mealCount;
 
         rows.push({
           date: current.format("DD/MM/YYYY"),
@@ -1382,6 +1547,10 @@ exports.exportInvoiceExcel = async (req, res) => {
           kitchen: order.user.kitchen,
 
           company,
+
+          guestType,
+
+          mealCount,
 
           food,
         });
@@ -1444,20 +1613,20 @@ exports.exportInvoiceExcel = async (req, res) => {
 
       { width: 10 },
 
-      {
-        width: 30,
-      },
+      { width: 18 },
 
-      {
-        width: 45,
-      },
+      { width: 22 },
+
+      { width: 10 },
+
+      { width: 45 },
     ];
 
     // ==========================================
     // Title
     // ==========================================
 
-    sheet.mergeCells("A1:G1");
+    sheet.mergeCells("A1:I1");
 
     sheet.getCell("A1").value =
       `BÁO CÁO SUẤT ĂN (${moment(from).format("DD/MM/YYYY")} - ${moment(to).format("DD/MM/YYYY")})`;
@@ -1493,7 +1662,11 @@ exports.exportInvoiceExcel = async (req, res) => {
 
       "Bếp",
 
+      "Loại Guest",
+
       "Tên công ty",
+
+      "Số bữa",
 
       "Món ăn",
     ];
@@ -1563,10 +1736,12 @@ exports.exportInvoiceExcel = async (req, res) => {
       sheet.getCell(rowIndex, 3).value = item.name;
       sheet.getCell(rowIndex, 4).value = item.email;
       sheet.getCell(rowIndex, 5).value = item.kitchen;
-      sheet.getCell(rowIndex, 6).value = item.company;
-      sheet.getCell(rowIndex, 7).value = item.food;
+      sheet.getCell(rowIndex, 6).value = getGuestTypeLabel(item.guestType);
+      sheet.getCell(rowIndex, 7).value = item.company;
+      sheet.getCell(rowIndex, 8).value = item.mealCount;
+      sheet.getCell(rowIndex, 9).value = item.food;
 
-      for (let i = 1; i <= 7; i++) {
+      for (let i = 1; i <= 9; i++) {
         const cell = sheet.getCell(rowIndex, i);
 
         cell.font = {
@@ -1578,7 +1753,7 @@ exports.exportInvoiceExcel = async (req, res) => {
         cell.alignment = {
           vertical: "middle",
 
-          horizontal: i === 7 ? "left" : "center",
+          horizontal: i === 9 ? "left" : "center",
 
           wrapText: true,
         };
@@ -1719,6 +1894,20 @@ exports.exportInvoiceExcel = async (req, res) => {
         rowIndex++;
       });
 
+    rowIndex += 2;
+    sheet.getCell(rowIndex, 1).value = "THỐNG KÊ THEO LOẠI GUEST";
+    sheet.getCell(rowIndex, 1).font = { bold: true, size: 14, name: "Times New Roman" };
+    rowIndex++;
+    [["Loại Guest", "Số suất"], ["Nhân viên", guestTypeSummary.employee], ["Chuyên gia", guestTypeSummary.expert]].forEach((values) => {
+      values.forEach((value, index) => {
+        const cell = sheet.getCell(rowIndex, index + 1);
+        cell.value = value;
+        cell.alignment = { horizontal: index === 0 ? "left" : "center" };
+        cell.border = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
+      });
+      rowIndex++;
+    });
+
     // ==========================================
     // Download
     // ==========================================
@@ -1767,22 +1956,8 @@ exports.exportLeftoverExcel = async (req, res) => {
 
     const menus = await Menu.find();
 
-    let selectedMenu = null;
-    let selectedDay = null;
-
-    for (const menu of menus) {
-      const day = menu.days.find(
-        (item) =>
-          moment(item.date).tz("Asia/Ho_Chi_Minh").format("YYYY-MM-DD") ===
-          targetDate,
-      );
-
-      if (day) {
-        selectedMenu = menu;
-        selectedDay = day;
-        break;
-      }
-    }
+    const menuDays = getMenuDaysForDate(menus, targetDate);
+    const selectedMenu = menuDays[0]?.menu;
 
     if (!selectedMenu) {
       return res.status(404).json({
@@ -1794,7 +1969,7 @@ exports.exportLeftoverExcel = async (req, res) => {
     // Header
     // =====================================
 
-    const headers = getMenuReportHeaders(selectedDay);
+    const headers = getMenuReportHeadersForDays(menuDays);
     addReportHeaderKeys(headers);
 
     // =====================================
@@ -1810,7 +1985,7 @@ exports.exportLeftoverExcel = async (req, res) => {
 
     const orders = await Order.find(orderFilter).populate({
       path: "user",
-      select: "employeeId name email kitchen",
+      select: "employeeId name email kitchen guestType company",
     });
     reconcileReportHeaders(headers, orders, targetDate);
 
@@ -1874,6 +2049,8 @@ exports.exportLeftoverExcel = async (req, res) => {
         name: order.user.name,
         email: order.user.email,
         kitchen: order.user.kitchen,
+        guestType: normalizeGuestType(order.user.guestType),
+        company: getCompany(order.user.email, order.user.company),
         foods,
       });
 
@@ -1910,6 +2087,8 @@ exports.exportLeftoverExcel = async (req, res) => {
           name: order.user.name,
           email: order.user.email,
           kitchen: order.user.kitchen,
+          guestType: normalizeGuestType(order.user.guestType),
+          company: getCompany(order.user.email, order.user.company),
           quantity: main.quantity,
         });
 
@@ -1931,6 +2110,8 @@ exports.exportLeftoverExcel = async (req, res) => {
             name: order.user.name,
             email: order.user.email,
             kitchen: order.user.kitchen,
+            guestType: normalizeGuestType(order.user.guestType),
+            company: getCompany(order.user.email, order.user.company),
             quantity: 1,
           });
 
@@ -1953,6 +2134,8 @@ exports.exportLeftoverExcel = async (req, res) => {
             name: order.user.name,
             email: order.user.email,
             kitchen: order.user.kitchen,
+            guestType: normalizeGuestType(order.user.guestType),
+            company: getCompany(order.user.email, order.user.company),
             quantity: 1,
           });
 
@@ -2007,7 +2190,7 @@ exports.exportLeftoverExcel = async (req, res) => {
           quantity: item.quantity,
 
           users: item.users
-            .map((u) => `${u.employeeId} - ${u.name} (Bếp ${u.kitchen})`)
+            .map((u) => `${u.employeeId} - ${u.name} (${getGuestTypeLabel(u.guestType)} · ${u.company || "Chưa cập nhật"} · Bếp ${u.kitchen})`)
             .join("\n"),
         });
       });
@@ -2100,6 +2283,8 @@ exports.exportLeftoverExcel = async (req, res) => {
       { header: "Họ tên", key: "name", width: 28 },
       { header: "Email", key: "email", width: 35 },
       { header: "Bếp", key: "kitchen", width: 10 },
+      { header: "Loại Guest", key: "guestType", width: 18 },
+      { header: "Công ty", key: "company", width: 22 },
       { header: "Đã đặt món", key: "foods", width: 70 },
     ];
 
@@ -2115,6 +2300,8 @@ exports.exportLeftoverExcel = async (req, res) => {
         name: user.name,
         email: user.email,
         kitchen: user.kitchen,
+        guestType: getGuestTypeLabel(user.guestType),
+        company: user.company,
         foods: user.foods.join("\n"),
       });
     });

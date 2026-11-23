@@ -26,6 +26,7 @@ function InvoiceReport() {
   const [rows, setRows] = useState([]);
 
   const [summary, setSummary] = useState({});
+  const [summaryByGuestType, setSummaryByGuestType] = useState({});
 
   const totalMeals = Object.values(summary).reduce(
     (total, value) => total + Number(value || 0),
@@ -49,6 +50,7 @@ function InvoiceReport() {
       setRows(res.data.data.rows);
 
       setSummary(res.data.data.summary);
+      setSummaryByGuestType(res.data.data.summaryByGuestType || {});
     } catch (err) {
       toast.error(err.response?.data?.message || "Không tải được báo cáo.");
     } finally {
@@ -153,7 +155,11 @@ function InvoiceReport() {
 
                 <th className="px-4 py-3 text-center">Bếp</th>
 
+                <th className="px-4 py-3 text-center">Loại Guest</th>
+
                 <th className="px-4 py-3 text-center">Công ty</th>
+
+                <th className="px-4 py-3 text-center">Số bữa</th>
 
                 <th className="px-4 py-3 text-left">Món ăn</th>
               </tr>
@@ -162,7 +168,7 @@ function InvoiceReport() {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-gray-500">
+                  <td colSpan={9} className="py-10 text-center text-gray-500">
                     Không có dữ liệu
                   </td>
                 </tr>
@@ -179,11 +185,15 @@ function InvoiceReport() {
 
                     <td className="px-4 py-3 text-center">{item.kitchen}</td>
 
+                    <td className="px-4 py-3 text-center">{item.guestType === "expert" ? "Chuyên gia" : "Nhân viên"}</td>
+
                     <td className="px-4 py-3 text-center">
                       <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-700">
                         {item.company}
                       </span>
                     </td>
+
+                    <td className="px-4 py-3 text-center font-semibold">{item.mealCount}</td>
 
                     <td className="px-4 py-3">{item.food}</td>
                   </tr>
@@ -227,7 +237,15 @@ function InvoiceReport() {
                 </div>
 
                 <div>
+                  <span className="font-semibold">Loại Guest:</span> {item.guestType === "expert" ? "Chuyên gia" : "Nhân viên"}
+                </div>
+
+                <div>
                   <span className="font-semibold">Công ty:</span> {item.company}
+                </div>
+
+                <div>
+                  <span className="font-semibold">Số bữa:</span> {item.mealCount}
                 </div>
 
                 <div>
@@ -282,6 +300,19 @@ function InvoiceReport() {
             <span className="text-3xl font-bold">{totalMeals}</span>
           </div>
         )}
+      </div>
+
+      <div className="rounded-2xl bg-white p-6 shadow">
+        <h2 className="mb-5 text-xl font-bold text-slate-800">Thống kê theo loại Guest</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {[["employee", "Nhân viên"], ["expert", "Chuyên gia"]].map(([type, label]) => (
+            <div key={type} className="rounded-2xl border border-orange-100 bg-orange-50 p-5">
+              <p className="text-sm font-medium text-gray-500">{label}</p>
+              <strong className="mt-2 block text-3xl text-orange-600">{summaryByGuestType?.[type] || 0}</strong>
+              <span className="text-sm text-gray-500">suất ăn trong kỳ</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
