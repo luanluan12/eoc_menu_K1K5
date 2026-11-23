@@ -16,7 +16,6 @@ function AddDishModal({
     const [subtitle, setSubtitle] = useState("");
     const [image, setImage] = useState(null);
     const [vegetarian, setVegetarian] = useState(false);
-    const [nameEn, setNameEn] = useState("");
     const [subtitleEn, setSubtitleEn] = useState("");
 
     useEffect(() => {
@@ -25,7 +24,6 @@ function AddDishModal({
 
     setName(dish?.name || "");
 
-    setNameEn(dish?.nameEn || "");
 
     setSubtitle(dish?.subtitle || "");
 
@@ -69,8 +67,6 @@ const preview =
     onSave({
 
     name: name.trim(),
-
-    nameEn: nameEn.trim(),
 
     subtitle: subtitle.trim(),
 
@@ -190,22 +186,6 @@ const preview =
     className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[15px] outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
 />
 
-<div className="mt-4">
-
-    <label className="mb-2 block text-sm font-semibold text-slate-700">
-
-        Tên món (English)
-
-    </label>
-
-    <input
-        value={nameEn}
-        onChange={(e) => setNameEn(e.target.value)}
-        placeholder="예: 치킨 덮밥"
-        className="w-full rounded-xl border border-gray-300 px-4 py-3 text-[15px] outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-    />
-
-</div>
                     <div className="mt-4">
 
     <label className="mb-2 block text-sm font-semibold text-slate-700">

@@ -80,8 +80,9 @@ function WeekMenuEditor({
 
     const now = new Date();
 
-    // Luôn tạo menu cho tuần sau
-    now.setDate(now.getDate() + 7);
+    // Chế độ test: tạo menu cho tuần hiện tại.
+    // Khôi phục dòng dưới khi kết thúc test để tạo menu tuần sau.
+    // now.setDate(now.getDate() + 7);
 
     const getISOWeek = (date) => {
       const d = new Date(
@@ -225,15 +226,15 @@ function WeekMenuEditor({
 
     // ========================
     // Deadline
-    // Thứ 6 tuần trước 16:00
+    // Chế độ test: cho đặt đến thứ 6 của tuần hiện tại lúc 16:00.
     // ========================
 
     const deadlineDate = new Date(monday);
 
-    deadlineDate.setDate(monday.getDate() - 3);
-
-    // // Deadline: Thứ 6 tuần này
-    // deadlineDate.setDate(monday.getDate() + 4);
+    // Deadline production: Thứ 6 tuần trước.
+    // deadlineDate.setDate(monday.getDate() - 3);
+    // Deadline test: Thứ 6 tuần hiện tại.
+    deadlineDate.setDate(monday.getDate() + 4);
 
     deadlineDate.setHours(16, 0, 0, 0);
 

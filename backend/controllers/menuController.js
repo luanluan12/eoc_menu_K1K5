@@ -8,6 +8,7 @@ const Order = require("../models/Order");
 const { createOrderToken } = require("../utils/orderToken");
 const getFrontendUrl = require("../utils/frontendUrl");
 const mongoose = require("mongoose");
+const { translateMenuDays } = require("../utils/freeTranslate");
 
 const normalizeMeals = async (meals = {}, resolveImage = async (_period, _category, _index, item) => ({ image: item?.image || "", imagePublicId: item?.imagePublicId || "" })) => {
   const result = {};
@@ -255,6 +256,8 @@ exports.createMenu = async (req, res) => {
       };
     }));
 
+    await translateMenuDays(resultDays);
+
     const menu = await Menu.create({
       week,
 
@@ -279,7 +282,7 @@ exports.createMenu = async (req, res) => {
   } catch (err) {
     console.error(err);
 
-    return res.status(500).json({
+    return res.status(err.statusCode || 500).json({
       success: false,
 
       message: err.message,
@@ -579,6 +582,8 @@ exports.updateMenu = async (req, res) => {
       }),
     );
 
+    await translateMenuDays(resultDays, menu.days);
+
     for (const [dayIndex, oldDay] of menu.days.entries()) {
       for (const period of ["lunch", "dinner"]) {
         for (const category of ["rice", "vegetarian", "noodles", "soup"]) {
@@ -615,7 +620,7 @@ exports.updateMenu = async (req, res) => {
   } catch (err) {
     console.error(err);
 
-    return res.status(500).json({
+    return res.status(err.statusCode || 500).json({
       success: false,
 
       message: err.message,

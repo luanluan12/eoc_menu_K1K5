@@ -23,7 +23,7 @@ function FlexibleMealsEditor({ day, onChange }) {
   };
   const add = (period, category) => {
     const next = { ...meals, [period]: { ...(meals[period] || {}) } };
-    next[period][category] = [...(next[period][category] || []), { name: "", nameEn: "" }];
+    next[period][category] = [...(next[period][category] || []), { name: "" }];
     onChange({ ...day, meals: next });
   };
   const remove = (period, category, index) => {
@@ -45,7 +45,6 @@ function FlexibleMealsEditor({ day, onChange }) {
             )}
             <div className="min-w-0 flex-1">
               <input value={typeof dish === "string" ? dish : dish.name || ""} onChange={(e) => update(period, category, index, { name: e.target.value })} placeholder="Tên món" className="w-full border-0 bg-transparent px-0 py-1 text-slate-800 outline-none ring-0 placeholder:text-slate-400 focus:border-0 focus:outline-none focus:ring-0"/>
-              <input value={typeof dish === "string" ? "" : dish.nameEn || ""} onChange={(e) => update(period, category, index, { nameEn: e.target.value })} placeholder="Dish name in English" className="w-full border-0 bg-transparent px-0 py-1 text-sm text-slate-600 outline-none ring-0 placeholder:text-slate-400 focus:border-0 focus:outline-none focus:ring-0"/>
             </div>
             <div className="flex shrink-0 flex-col gap-2">
               {(dish.image || dish.preview) &&
