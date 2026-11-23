@@ -45,6 +45,21 @@ function UserManagement() {
 
   const [selectedUser, setSelectedUser] = useState(null);
 
+  const renderRole = (user) => user.role === "guest" ? (
+    <span className="inline-flex min-w-36 flex-col items-center rounded-lg border border-blue-100 bg-blue-50 px-3 py-1.5 text-blue-700 leading-tight">
+      <span className="text-sm font-semibold">Guest</span>
+      <span className="mt-0.5 text-[11px] font-medium text-blue-600">
+        {user.guestType === "expert" ? "Chuyên gia" : user.guestType === "employee" ? "Nhân viên" : "Chưa chọn loại"}
+        <span className="mx-1 text-blue-300">·</span>
+        {user.company || "Chưa chọn công ty"}
+      </span>
+    </span>
+  ) : (
+    <span className="inline-flex rounded-lg bg-blue-100 px-3 py-1 text-blue-700">
+      {user.role}
+    </span>
+  );
+
   const handleDownloadTemplate = async () => {
     if (downloadingTemplate) return;
     setDownloadingTemplate(true);
@@ -108,10 +123,11 @@ function UserManagement() {
       const result = res.data;
 
       toast.success(
-        `Đã thêm ${result.success} user, bỏ qua ${result.failed} user.`,
+        `Đã thêm ${result.imported ?? 0} user, bỏ qua ${result.failed ?? 0} user.`,
       );
 
       if (result.errors?.length) {
+        toast.info(`Có ${result.errors.length} dòng lỗi. Mở Console để xem chi tiết.`);
         console.table(result.errors);
       }
 
@@ -353,9 +369,7 @@ function UserManagement() {
                   </td>
 
                   <td className="px-4 py-3 text-center">
-                    <span className="bg-blue-100 text-blue-700 rounded px-3 py-1">
-                      {user.role}
-                    </span>
+                    {renderRole(user)}
                   </td>
 
                   <td className="px-4 py-3 text-center">
@@ -426,9 +440,7 @@ function UserManagement() {
                   <p className="text-sm text-gray-500">{user.employeeId}</p>
                 </div>
 
-                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs text-blue-700">
-                  {user.role}
-                </span>
+                {renderRole(user)}
               </div>
 
               <div className="mt-4 space-y-2 text-sm">

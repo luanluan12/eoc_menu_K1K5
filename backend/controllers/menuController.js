@@ -88,6 +88,7 @@ const validateMealMenuDays = (days, files = []) => {
 exports.createMenu = async (req, res) => {
   try {
     const { week, year, openTime, deadline } = req.body;
+    const guestType = req.body.guestType === "expert" ? "expert" : "employee";
 
     if (!week) {
       return res.status(400).json({
@@ -99,6 +100,7 @@ exports.createMenu = async (req, res) => {
 
     const existed = await Menu.findOne({
       week,
+      guestType,
     });
 
     if (existed) {
@@ -261,6 +263,8 @@ exports.createMenu = async (req, res) => {
     const menu = await Menu.create({
       week,
 
+      guestType,
+
       year,
 
       status: "draft",
@@ -324,8 +328,11 @@ exports.getMenus = async (req, res) => {
  */
 exports.getWeekMenu = async (req, res) => {
   try {
+    const user = await User.findById(req.user.id).select("guestType");
+    const guestType = user?.guestType === "expert" ? "expert" : "employee";
     const menu = await Menu.findOne({
       status: "published",
+      guestType,
     })
       .sort({ createdAt: -1 })
       .lean();
@@ -366,6 +373,18 @@ exports.updateMenu = async (req, res) => {
     }
 
     const { week, year, status } = req.body;
+    const guestType = req.body.guestType === "expert" ? "expert" : menu.guestType;
+
+    if ((week && week !== menu.week) || guestType !== menu.guestType) {
+      const existed = await Menu.findOne({
+        _id: { $ne: menu._id },
+        week: week || menu.week,
+        guestType,
+      });
+      if (existed) {
+        return res.status(400).json({ success: false, message: "Menu tuần này cho nhóm user đã tồn tại." });
+      }
+    }
 
     let days = [];
 
@@ -599,6 +618,8 @@ exports.updateMenu = async (req, res) => {
 
     menu.week = week || menu.week;
 
+    menu.guestType = guestType;
+
     menu.year = year || menu.year;
 
     menu.status = status || menu.status;
@@ -724,6 +745,7 @@ exports.publishMenu = async (req, res) => {
     // Lấy toàn bộ User đặt cơm
     const users = await User.find({
       role: "guest",
+      guestType: menu.guestType,
     });
 
     let sent = 0;

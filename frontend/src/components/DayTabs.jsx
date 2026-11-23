@@ -15,13 +15,8 @@ function DayTabs({ days, currentDay, onChange, completed }) {
                 : "vi-VN";
 
         return {
-
-            weekday: d.toLocaleDateString(locale, {
-                weekday: "long",
-            }),
-
+            weekday: d.toLocaleDateString(locale, { weekday: "long" }),
             day: `${d.getDate()}/${d.getMonth() + 1}`,
-
         };
 
     };

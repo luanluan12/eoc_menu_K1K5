@@ -12,6 +12,7 @@ function WeekMenuEditor({
   historyLoading = false,
 }) {
   const [week, setWeek] = useState("");
+  const [guestType, setGuestType] = useState("employee");
 
   const [days, setDays] = useState([]);
 
@@ -28,6 +29,7 @@ function WeekMenuEditor({
     if (!initialData) return;
 
     setWeek(initialData.week);
+    setGuestType(initialData.guestType === "expert" ? "expert" : "employee");
 
     setOpenTime(initialData.openTime ? initialData.openTime.slice(0, 16) : "");
 
@@ -361,6 +363,8 @@ function WeekMenuEditor({
 
     formData.append("week", week);
 
+    formData.append("guestType", guestType);
+
     formData.append(
       "year",
 
@@ -507,6 +511,16 @@ function WeekMenuEditor({
 
       <div className="rounded-2xl bg-white p-4 shadow sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <select
+            value={guestType}
+            disabled={!!initialData}
+            onChange={(event) => setGuestType(event.target.value)}
+            aria-label="Loại user của menu"
+            className="w-full rounded-xl border p-3 sm:w-56"
+          >
+            <option value="employee">Menu cho Nhân viên</option>
+            <option value="expert">Menu cho Chuyên gia</option>
+          </select>
           <input
             type="week"
             value={week}
@@ -532,7 +546,7 @@ function WeekMenuEditor({
               {historyOpen && (
                 <div className="absolute right-0 z-20 mt-2 max-h-72 w-full min-w-72 overflow-y-auto rounded-xl border bg-white p-2 shadow-xl sm:w-80">
                   {historyMenus
-                    .filter((menu) => !week || menu.week < week)
+                    .filter((menu) => menu.guestType === guestType && (!week || menu.week < week))
                     .map((menu) => (
                     <button
                       key={menu._id}

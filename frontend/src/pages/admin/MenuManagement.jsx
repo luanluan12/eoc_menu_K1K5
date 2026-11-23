@@ -311,6 +311,8 @@ const confirmPublish = async () => {
                                 Tuần
                             </th>
 
+                            <th className="px-4 py-3 text-center">Dành cho</th>
+
                             <th className="px-4 py-3 text-center">
                                 Năm
                             </th>
@@ -372,6 +374,12 @@ const confirmPublish = async () => {
                                             <div>{menu.week}</div>
                                             <div className="mt-1 text-xs font-normal text-slate-500">{getMenuDateRange(menu)}</div>
 
+                                        </td>
+
+                                        <td className="px-4 py-3 text-center">
+                                            <span className="rounded-full bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+                                                {menu.guestType === "expert" ? "Chuyên gia" : "Nhân viên"}
+                                            </span>
                                         </td>
 
                                         <td className="px-4 py-3 text-center">
@@ -527,6 +535,10 @@ const confirmPublish = async () => {
                                 Năm {menu.year}
 
                             </p>
+
+                            <span className="mt-1 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
+                                {menu.guestType === "expert" ? "Menu Chuyên gia" : "Menu Nhân viên"}
+                            </span>
 
                             <p className="mt-1 text-xs text-slate-500">{getMenuDateRange(menu)}</p>
 

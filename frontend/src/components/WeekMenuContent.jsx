@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
 import DayTabs from "./DayTabs";
-import FoodGroup from "./FoodGroup";
 import OrderNotice from "./OrderNotice";
 import { useNavigate } from "react-router-dom";
 import Swal from "sweetalert2";
 import { useTranslation } from "react-i18next";
+import { Check, CookingPot, CupSoda, Soup, UtensilsCrossed } from "lucide-react";
 
 const MEAL_CATEGORIES = ["rice", "vegetarian", "noodles", "soup"];
+const CATEGORY_ICONS = { rice: CookingPot, vegetarian: UtensilsCrossed, noodles: CupSoda, soup: Soup };
 
 function getMealsForDisplay(day) {
   const flexible = day?.meals || {};
@@ -254,47 +255,83 @@ function WeekMenuContent({
           🔒 {t("day_off_message")}
         </div>
       )}
-      {!isReadonly && (
-        <div className="mb-10">
-          <OrderNotice flexible />
-        </div>
-      )}
+      <div className="space-y-9">
+        {[['lunch', t("meal_lunch")], ['dinner', t("meal_dinner")]].map(([period, periodLabel]) => {
+          const availableCategories = MEAL_CATEGORIES.filter((category) =>
+            (displayedMeals[period]?.[category] || []).some((dish) => typeof dish === "string" ? dish.trim() : dish?.name?.trim()),
+          );
+          const selectedOption = orders[currentDay]?.selections?.[period]
+            || orders[currentDay]?.mains.find((item) => (item.mealPeriod === "dinner" ? "dinner" : "lunch") === period)?.category;
+          const selectedCategory = availableCategories.includes(selectedOption) ? selectedOption : null;
+          const displayCategory = selectedCategory || availableCategories[0];
+          const selectedFoods = displayCategory
+            ? (displayedMeals[period]?.[displayCategory] || []).filter((dish) => typeof dish === "string" ? dish.trim() : dish?.name?.trim())
+            : [];
 
-      <div className="space-y-10">
-        {[["lunch", t("meal_lunch"), t("meal_required")], ["dinner", t("meal_dinner"), t("meal_optional")]].map(([period, periodLabel, requirement]) => (
-          <section key={period} className="rounded-2xl py-2 sm:py-3">
-            <h2 className="mb-6 flex items-center gap-3 text-xl font-bold text-slate-800">
-              {periodLabel}
-            </h2>
-            {!isReadonly && <p className="-mt-3 mb-5 text-sm text-slate-500">{t("choose_one_option")}</p>}
-            {MEAL_CATEGORIES.some((category) => (displayedMeals[period]?.[category] || []).length > 0) ? (
-            <div className="space-y-8">
-              {[["rice", t("meal_rice")], ["vegetarian", t("meal_vegetarian")], ["noodles", t("meal_noodles")], ["soup", t("meal_soup")]].map(([category, label]) => {
-                const foods = (displayedMeals[period]?.[category] || []).filter((dish) => (typeof dish === "string" ? dish.trim() : dish.name?.trim()));
-                if (!foods.length) return null;
-                const selectedOption = orders[currentDay]?.selections?.[period]
-                  || orders[currentDay]?.mains.find((item) => (item.mealPeriod === "dinner" ? "dinner" : "lunch") === period)?.category;
-                return (
-                  <FoodGroup
-                    key={category}
-                    title={label}
-                    foods={foods}
-                    type="main"
-                    readOnly
-                    optionSelectable={!isReadonly && editable && !isDayClosed}
-                    optionSelected={selectedOption === category}
-                    onSelectOption={() => selectOption(period, category)}
-                  />
-                );
-              })}
-            </div>
-            ) : (
-              <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/60 p-6 text-center text-slate-500">{t("no_meal_period_menu")}</div>
-            )}
-          </section>
-        ))}
+          return (
+            <section key={period} className="border-t border-orange-200/80 pt-5 first:border-t-0 first:pt-0">
+              <div className="mb-4 flex items-center gap-3 text-slate-800">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-500 text-white shadow-sm">
+                  {period === "lunch" ? <UtensilsCrossed size={18} /> : <CookingPot size={18} />}
+                </span>
+                <h2 className="text-lg font-bold sm:text-xl">{periodLabel}</h2>
+              </div>
+
+              {availableCategories.length ? (
+                <div className="grid gap-3 sm:grid-cols-[230px_minmax(0,1fr)] sm:gap-4">
+                  <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 scrollbar-hide sm:flex-col sm:justify-center sm:overflow-visible sm:pb-0">
+                    {availableCategories.map((category) => {
+                      const Icon = CATEGORY_ICONS[category];
+                      const selected = selectedCategory === category;
+                      const viewing = displayCategory === category;
+                      return (
+                        <button
+                          key={category}
+                          type="button"
+                          aria-pressed={selected}
+                          disabled={isReadonly || !editable || isDayClosed}
+                          onClick={() => selectOption(period, category)}
+                          className={`flex min-h-12 min-w-[160px] shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-left text-[11px] font-semibold transition sm:min-h-12 sm:min-w-0 sm:shrink sm:text-xs ${selected ? "border-orange-500 bg-orange-500 text-white shadow-sm" : viewing ? "border-orange-300 bg-orange-50 text-slate-800" : "border-orange-100 bg-white/85 text-slate-700 hover:border-orange-300 hover:bg-orange-50 disabled:cursor-default"}`}
+                        >
+                          <Icon size={18} className={`shrink-0 ${selected ? "text-white" : "text-orange-600"}`} />
+                          <span className="min-w-0 flex-1 whitespace-nowrap">{t(`meal_${category}`)}</span>
+                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${selected ? "border-white bg-white text-orange-600" : "border-slate-300 bg-white text-white"}`} aria-hidden="true">
+                            {selected && <Check size={14} strokeWidth={3} />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {displayCategory ? (
+                    <div className="flex flex-wrap justify-center gap-2.5">
+                      {selectedFoods.map((food, index) => {
+                        const name = typeof food === "string" ? food : food.name || "";
+                        const nameEn = typeof food === "string" ? "" : food.nameEn || "";
+                        const subtitle = typeof food === "string" ? "" : food.subtitle || "";
+                        const displayName = i18n.language === "en" ? nameEn || name : name;
+                        return (
+                          <article key={food._id || `${name}-${index}`} className="flex min-h-[220px] w-[calc(50%-0.3125rem)] max-w-[190px] flex-col rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md sm:min-h-[260px] sm:p-3">
+                            <div className="aspect-square w-full shrink-0 overflow-hidden rounded-xl bg-orange-50">
+                              <img src={food.image || "https://placehold.co/600"} alt={displayName} loading="lazy" decoding="async" className="h-full w-full rounded-xl object-cover" />
+                            </div>
+                            <div className="flex min-h-[60px] flex-1 flex-col items-center justify-center px-1 py-2 text-center">
+                              <h3 className="line-clamp-2 text-xs font-semibold leading-snug text-slate-800 sm:text-sm">{displayName}</h3>
+                              {subtitle && <p className="mt-1 line-clamp-1 text-[10px] text-slate-500 sm:text-xs">{subtitle}</p>}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-orange-200 bg-orange-50/60 p-5 text-center text-sm text-slate-500">{t("no_meal_period_menu")}</div>
+              )}
+            </section>
+          );
+        })}
       </div>
-
       {!isReadonly && (
         <div className="mt-14 flex justify-center">
         <button

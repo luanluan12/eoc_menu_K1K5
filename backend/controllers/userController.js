@@ -17,6 +17,18 @@ const normalizeKitchen = (value) => {
   return kitchenMap[normalized] || null;
 };
 
+const normalizeGuestType = (value) => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (["employee", "nhân viên", "nhan vien"].includes(normalized)) return "employee";
+  if (["expert", "chuyên gia", "chuyen gia"].includes(normalized)) return "expert";
+  return null;
+};
+
+const normalizeCompany = (value) => {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return ["BVN", "BMS"].includes(normalized) ? normalized : null;
+};
+
 /**
  * Lấy danh sách User
  */
@@ -76,7 +88,7 @@ exports.getUserById = async (req, res) => {
  */
 exports.createUser = async (req, res) => {
   try {
-    const { employeeId, name, email, password, kitchen, role, language } =
+    const { employeeId, name, email, password, kitchen, role, language, guestType, company } =
       req.body;
 
     let userKitchen = normalizeKitchen(kitchen);
@@ -99,6 +111,13 @@ exports.createUser = async (req, res) => {
       userRole = "guest";
     } else if (userRole === "admin") {
       userKitchen = "K1, K5";
+    }
+
+    if (userRole === "guest" && (!["employee", "expert"].includes(guestType) || !["BVN", "BMS"].includes(company))) {
+      return res.status(400).json({
+        success: false,
+        message: "Vui lòng chọn loại Guest và công ty BVN hoặc BMS.",
+      });
     }
 
     if (!name || !email) {
@@ -144,6 +163,10 @@ exports.createUser = async (req, res) => {
       kitchen: userKitchen,
 
       role: userRole,
+
+      guestType: userRole === "guest" ? guestType : null,
+
+      company: userRole === "guest" ? company : null,
 
       language: language || "vi",
     });
@@ -252,6 +275,25 @@ exports.updateUser = async (req, res) => {
       if (user.role === "admin") {
         user.kitchen = "K1, K5";
       }
+    }
+
+    if (user.role === "guest") {
+      const guestType = req.body.guestType ?? user.guestType;
+      const company = req.body.company ?? user.company;
+      if (
+        (req.body.guestType !== undefined || req.body.company !== undefined) &&
+        (!["employee", "expert"].includes(guestType) || !["BVN", "BMS"].includes(company))
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Vui lòng chọn loại Guest và công ty BVN hoặc BMS.",
+        });
+      }
+      user.guestType = guestType;
+      user.company = company;
+    } else {
+      user.guestType = null;
+      user.company = null;
     }
 
     await user.save();
@@ -671,8 +713,20 @@ exports.importExcel = async (req, res) => {
 
         if (req.user.role !== "admin_kitchen") {
           const roles = ["guest", "admin", "admin_kitchen"];
+          const requestedRole = String(row.Role ?? "guest").trim().toLowerCase();
+          role = roles.includes(requestedRole) ? requestedRole : "guest";
+        }
 
-          role = roles.includes(row.Role) ? row.Role : "guest";
+        const guestType = normalizeGuestType(row.GuestType ?? row["Guest Type"] ?? row["Loại Guest"]);
+        const company = normalizeCompany(row.Company ?? row["Công ty"]);
+
+        if (role === "guest" && (!guestType || !company)) {
+          failed++;
+          errors.push({
+            row: i + 2,
+            message: "Guest cần GuestType (employee/expert) và Company (BVN/BMS).",
+          });
+          continue;
         }
 
         if (!employeeId || !name || !email) {
@@ -732,6 +786,12 @@ exports.importExcel = async (req, res) => {
 
           role,
 
+          guestType: role === "guest" ? guestType : null,
+
+          company: role === "guest" ? company : null,
+
+          language,
+
           password: hashPassword,
         });
 
@@ -783,6 +843,10 @@ exports.downloadTemplate = async (req, res) => {
       Kitchen: "K1",
 
       Role: "guest",
+
+      GuestType: "employee",
+
+      Company: "BVN",
 
       Language: "vi",
     },

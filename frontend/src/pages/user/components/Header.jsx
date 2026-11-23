@@ -62,7 +62,7 @@ function Header() {
 
         <header className="sticky top-0 z-50 border-b border-white/30 bg-white/20 backdrop-blur-xl">
 
-            <div className="mx-auto flex h-16 max-w-[1120px] items-center justify-between px-4 sm:h-[72px] sm:px-6 lg:px-10">
+            <div className="mx-auto flex h-14 max-w-[1120px] items-center justify-between px-4 sm:h-16 sm:px-6 lg:px-8">
 
                 {/* Logo */}
 
@@ -74,7 +74,7 @@ function Header() {
 
                         alt="Logo"
 
-                        className="h-16 w-auto object-contain sm:h-24 lg:h-32"
+                        className="h-10 w-auto object-contain sm:h-12 lg:h-14"
 
                     />
 
@@ -82,15 +82,15 @@ function Header() {
 
                 {/* Right */}
 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 sm:gap-3">
 
                     {/* Language */}
 
-                    <div className="overflow-hidden rounded-xl border border-white/40 bg-white/30 shadow-md backdrop-blur-md">
+                    <div className="overflow-hidden rounded-xl border border-orange-100 bg-white/80 shadow-sm backdrop-blur-md">
 
                         <button
     onClick={() => changeLanguage("vi")}
-    className={`px-3 py-2 transition ${
+    className={`px-2.5 py-1.5 text-xs font-semibold transition sm:px-3 sm:py-2 sm:text-sm ${
         i18n.language === "vi"
             ? "bg-orange-500 text-white"
             : "text-gray-700 hover:bg-white/40"
@@ -101,7 +101,7 @@ function Header() {
 
                         <button
     onClick={() => changeLanguage("en")}
-    className={`px-3 py-2 transition ${
+    className={`px-2.5 py-1.5 text-xs font-semibold transition sm:px-3 sm:py-2 sm:text-sm ${
         i18n.language === "en"
             ? "bg-orange-500 text-white"
             : "text-gray-700 hover:bg-white/40"
@@ -126,11 +126,11 @@ function Header() {
 
                             onClick={() => setOpen(!open)}
 
-                            className="flex items-center gap-2 rounded-2xl bg-white/30 px-3 py-2 shadow-md backdrop-blur-md transition hover:bg-white/40 sm:gap-3 sm:px-4"
+                            className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-white/80 px-2.5 py-1.5 shadow-sm backdrop-blur-md transition hover:bg-white sm:gap-3 sm:px-3 sm:py-2"
 
                         >
 
-                            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-600 text-sm font-bold text-white sm:h-10 sm:w-10">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-600 text-sm font-bold text-white sm:h-9 sm:w-9">
 
                                 {user?.name?.charAt(0)}
 

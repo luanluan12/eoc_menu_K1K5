@@ -164,8 +164,6 @@ const menuSchema = new mongoose.Schema({
 
         required: true,
 
-        unique: true,
-
         trim: true
 
     },
@@ -194,6 +192,13 @@ const menuSchema = new mongoose.Schema({
 
         default: "draft"
 
+    },
+
+    guestType: {
+        type: String,
+        enum: ["employee", "expert"],
+        default: "employee",
+        required: true,
     },
 
     days: {
@@ -231,6 +236,8 @@ const menuSchema = new mongoose.Schema({
     timestamps: true
 
 });
+
+menuSchema.index({ week: 1, guestType: 1 }, { unique: true });
 
 module.exports = mongoose.model(
 

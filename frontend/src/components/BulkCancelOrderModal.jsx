@@ -196,7 +196,7 @@ function BulkCancelOrderModal({ open, onClose, onSuccess }) {
             >
               {menus.map((menu) => (
                 <option key={menu._id} value={menu._id}>
-                  {menu.week}{menu.year ? ` - ${menu.year}` : ""}
+                  {menu.week}{menu.year ? ` - ${menu.year}` : ""} · {menu.guestType === "expert" ? "Chuyên gia" : "Nhân viên"}
                 </option>
               ))}
             </select>

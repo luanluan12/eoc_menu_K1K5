@@ -7,7 +7,7 @@ function DeadlineBanner({ deadline: deadlineValue }) {
 
     const [expired, setExpired] = useState(false);
 
-    const { t , i18n} = useTranslation();
+    const { t, i18n } = useTranslation();
 
     useEffect(() => {
 
@@ -65,38 +65,21 @@ value += `${hours} ${t("hour")} ${minutes} ${t("minute")}`;
 
         <div
             className={`
-                mb-6 rounded-2xl border p-4 text-center shadow
-
-                ${
-                    expired
-                        ? "border-red-300 bg-red-50"
-                        : "border-red-300 bg-red-50"
-                }
+                mx-auto mb-6 w-full max-w-[1120px] rounded-2xl border p-4 text-center shadow
+                ${expired ? "border-red-300 bg-red-50" : "border-red-300 bg-red-50"}
             `}
         >
-
             <div className="text-sm text-gray-500">
-
                 ⏰ {t("order_deadline_remaining")}
-
             </div>
-
             <div
                 className={`
                     mt-2 text-2xl font-bold
-
-                    ${
-                        expired
-                            ? "text-red-600"
-                            : "text-red-600"
-                    }
+                    ${expired ? "text-red-600" : "text-red-600"}
                 `}
             >
-
                 {text}
-
             </div>
-
         </div>
 
     );

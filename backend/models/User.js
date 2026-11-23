@@ -40,6 +40,16 @@ const userSchema = new mongoose.Schema(
       ],
       default: "guest",
     },
+    guestType: {
+      type: String,
+      enum: ["employee", "expert"],
+      default: null,
+    },
+    company: {
+      type: String,
+      enum: ["BVN", "BMS"],
+      default: null,
+    },
     language: {
       type: String,
 

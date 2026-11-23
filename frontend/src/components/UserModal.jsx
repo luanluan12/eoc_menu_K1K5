@@ -7,6 +7,8 @@ function UserModal({ open, onClose, onSave, editingUser, saving = false }) {
     email: "",
     kitchen: "K1",
     role: "guest",
+    guestType: "",
+    company: "",
     language: "vi",
     password: "",
   });
@@ -19,6 +21,8 @@ function UserModal({ open, onClose, onSave, editingUser, saving = false }) {
         email: editingUser.email || "",
         kitchen: editingUser.role === "admin" ? "K1, K5" : (editingUser.kitchen?.toString() || "K1"),
         role: editingUser.role || "guest",
+        guestType: editingUser.guestType || "",
+        company: editingUser.company || "",
         language: editingUser.language || "vi",
         password: "",
       });
@@ -29,6 +33,8 @@ function UserModal({ open, onClose, onSave, editingUser, saving = false }) {
         email: "",
         kitchen: "K1",
         role: "guest",
+        guestType: "",
+        company: "",
         language: "vi",
         password: "",
       });
@@ -64,6 +70,10 @@ function UserModal({ open, onClose, onSave, editingUser, saving = false }) {
 
     if (!form.email.trim()) {
       return alert("Nhập Email");
+    }
+
+    if (form.role === "guest" && (!form.guestType || !form.company)) {
+      return alert("Chọn loại Guest và công ty BVN hoặc BMS");
     }
 
     if (!editingUser && !form.password.trim()) {
@@ -146,6 +156,27 @@ function UserModal({ open, onClose, onSave, editingUser, saving = false }) {
               <option value="guest">guest</option>
             </select>
           </div>
+
+          {form.role === "guest" && (
+            <>
+              <div>
+                <label className="mb-2 block">Loại Guest</label>
+                <select name="guestType" value={form.guestType} onChange={handleChange} className="w-full rounded-lg border p-3">
+                  <option value="">Chọn loại Guest</option>
+                  <option value="employee">Nhân viên</option>
+                  <option value="expert">Chuyên gia</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-2 block">Công ty</label>
+                <select name="company" value={form.company} onChange={handleChange} className="w-full rounded-lg border p-3">
+                  <option value="">Chọn công ty</option>
+                  <option value="BVN">BVN</option>
+                  <option value="BMS">BMS</option>
+                </select>
+              </div>
+            </>
+          )}
 
           <div>
             <label className="block mb-2">Language</label>

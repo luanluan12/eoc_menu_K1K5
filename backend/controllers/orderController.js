@@ -162,7 +162,7 @@ exports.verifyInvite = async (
     const payload = verifyOrderToken(token);
 
     const user = await User.findById(payload.userId).select(
-      "name email employeeId",
+      "name email employeeId guestType",
     );
 
     if (!user) {
@@ -181,6 +181,10 @@ exports.verifyInvite = async (
 
         message: "Menu not found.",
       });
+    }
+
+    if (menu.guestType !== (user.guestType === "expert" ? "expert" : "employee")) {
+      return res.status(403).json({ success: false, message: "Menu không dành cho nhóm user này." });
     }
 
     if (menu.status !== "published") {
@@ -232,6 +236,12 @@ exports.createOrder = async (req, res) => {
         success: false,
         message: "Không tìm thấy Menu.",
       });
+    }
+
+    const orderingUser = await User.findById(userId).select("guestType");
+    const guestType = orderingUser?.guestType === "expert" ? "expert" : "employee";
+    if (menu.guestType !== guestType) {
+      return res.status(403).json({ success: false, message: "Menu không dành cho nhóm user của bạn." });
     }
 
     if (!canOrder(menu)) {
@@ -343,6 +353,10 @@ exports.createOrderFromInvite = async (
 
         message: "Không tìm thấy Menu.",
       });
+    }
+
+    if (menu.guestType !== (user.guestType === "expert" ? "expert" : "employee")) {
+      return res.status(403).json({ success: false, message: "Menu không dành cho nhóm user này." });
     }
 
     if (menu.status !== "published") {
@@ -1182,7 +1196,7 @@ const prepareBulkCancel = async ({ menuId, dates, employeeIds }) => {
     throw error;
   }
 
-  const allGuests = await User.find({ role: "guest" }).select(
+  const allGuests = await User.find({ role: "guest", guestType: menu.guestType }).select(
     "employeeId name email kitchen",
   );
   const usersByEmployeeId = new Map(
@@ -1273,8 +1287,8 @@ exports.getBulkCancelOptions = async (req, res) => {
   try {
     const menus = await Menu.find({ status: "published" })
       .sort({ createdAt: -1 })
-      .limit(2)
-      .select("week year days.date");
+      .limit(6)
+      .select("week year guestType days.date");
 
     return res.json({ success: true, data: menus });
   } catch (err) {
@@ -1378,7 +1392,7 @@ exports.getAvailableUsers = async (req, res) => {
       status: "published",
     })
       .sort({ createdAt: -1 })
-      .limit(2);
+      .limit(6);
 
     if (menus.length === 0) {
       return res.status(404).json({
@@ -1400,6 +1414,7 @@ exports.getAvailableUsers = async (req, res) => {
 
     const userFilter = {
       role: "guest",
+      guestType: menu.guestType,
     };
 
     // Admin bếp
@@ -1408,13 +1423,13 @@ exports.getAvailableUsers = async (req, res) => {
     }
 
     const users = await User.find(userFilter)
-      .select("employeeId name email kitchen")
+      .select("employeeId name email kitchen guestType")
       .sort({
         employeeId: 1,
       });
 
     const orderedUsers = await Order.find({
-      week: menu.week,
+      menu: menu._id,
       status: "ordered",
       days: {
         $elemMatch: {
@@ -1435,6 +1450,7 @@ exports.getAvailableUsers = async (req, res) => {
       _id: item._id,
       week: item.week,
       year: item.year,
+      guestType: item.guestType,
     }));
 
     return res.json({
@@ -1489,6 +1505,10 @@ exports.createManualOrder = async (req, res) => {
         success: false,
         message: "Không tìm thấy Menu.",
       });
+    }
+
+    if (user.role === "guest" && menu.guestType !== (user.guestType === "expert" ? "expert" : "employee")) {
+      return res.status(400).json({ success: false, message: "Menu không dành cho nhóm user đã chọn." });
     }
 
     if (menu.status !== "published") {

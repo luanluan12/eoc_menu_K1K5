@@ -1,4 +1,4 @@
-import { Lightbulb } from "lucide-react";
+import { ConciergeBell } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 import bepImage from "../assets/anh-optimized.png";
@@ -9,39 +9,17 @@ function OrderNotice({ flexible = false }) {
 
     return (
 
-        <div
-            className="
-                mt-6
-                flex
-                flex-col
-                gap-5
-                rounded-3xl
-                bg-gradient-to-r
-                from-orange-50
-                via-orange-50
-                to-orange-50
-                p-5
-                shadow-sm
-
-                sm:p-6
-                lg:mt-8
-                lg:flex-row
-                lg:items-center
-                lg:justify-between
-                lg:px-10
-                lg:py-7
-            "
-        >
+        <div className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-orange-100 bg-gradient-to-r from-orange-100/90 via-orange-50 to-orange-100/70 px-3 py-3 shadow-sm sm:mt-5 sm:gap-5 sm:px-5 sm:py-3">
 
             {/* Left */}
 
-            <div className="flex items-start gap-4 sm:items-center sm:gap-6">
+            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
 
                 <div
                     className="
                         flex
-                        h-12
-                        w-12
+                        h-10
+                        w-10
                         shrink-0
                         items-center
                         justify-center
@@ -50,20 +28,18 @@ function OrderNotice({ flexible = false }) {
                         text-white
                         shadow-lg
 
-                        sm:h-16
-                        sm:w-16
+                        sm:h-12
+                        sm:w-12
                     "
                 >
 
-                    <Lightbulb size={24} className="sm:hidden" />
-
-                    <Lightbulb size={32} className="hidden sm:block" />
+                    <ConciergeBell size={23} />
 
                 </div>
 
                 <div>
 
-                    <p className="text-base font-semibold leading-7 text-slate-800 sm:text-lg">
+                    <p className="text-xs font-semibold leading-5 text-slate-800 sm:text-sm sm:leading-6">
 
                         {flexible ? t("notice_automatic") : <>
 
@@ -91,7 +67,7 @@ function OrderNotice({ flexible = false }) {
 
                     </p>
 
-                    {flexible && <p className="mt-2 text-sm text-slate-500 sm:text-[15px]">{t("notice_automatic_detail")}</p>}
+                    {flexible && <p className="mt-1 text-[10px] leading-4 text-slate-600 sm:text-xs">{t("notice_automatic_detail")}</p>}
 
                 </div>
 
@@ -99,7 +75,7 @@ function OrderNotice({ flexible = false }) {
 
             {/* Right */}
 
-            <div className="flex justify-center lg:justify-end">
+            <div className="flex shrink-0 justify-end">
 
                 <img
 
@@ -112,11 +88,10 @@ function OrderNotice({ flexible = false }) {
                     decoding="async"
 
                     className="
-                        h-20
+                        h-14
                         w-auto
                         object-contain
-
-                        sm:h-24
+                        sm:h-[68px]
                     "
 
                 />

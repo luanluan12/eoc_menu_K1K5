@@ -97,6 +97,8 @@ exports.login = async (req, res) => {
         role: user.role,
 
         kitchen: user.kitchen,
+
+        guestType: user.guestType,
       },
     });
   } catch (err) {

@@ -6,6 +6,7 @@ const generateToken = (user) => {
       id: user._id,
       role: user.role,
       kitchen: user.kitchen,
+      guestType: user.guestType,
     },
     process.env.JWT_SECRET,
   );

@@ -107,7 +107,7 @@ function ManualOrderModal({ open, onClose, onSuccess }) {
               >
                 {menus.map((item) => (
                   <option key={item._id} value={item._id}>
-                    {item.week}{item.year ? ` - ${item.year}` : ""}
+                    {item.week}{item.year ? ` - ${item.year}` : ""} · {item.guestType === "expert" ? "Chuyên gia" : "Nhân viên"}
                   </option>
                 ))}
               </select>
