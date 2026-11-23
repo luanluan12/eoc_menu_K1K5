@@ -326,7 +326,7 @@ function WeekMenuContent({
                         })}
                       </div>
                     ) : (
-                      <div className="flex w-full items-start justify-start gap-2.5 overflow-x-auto overscroll-x-contain pb-2 scrollbar-hide sm:h-full sm:gap-3">
+                      <div className="flex w-full items-start justify-center gap-2.5 overflow-x-auto overscroll-x-contain pb-2 scrollbar-hide sm:h-full sm:gap-3">
                         {selectedFoods.map((food, index) => {
                           const name = typeof food === "string" ? food : food.name || "";
                           const nameEn = typeof food === "string" ? "" : food.nameEn || "";
